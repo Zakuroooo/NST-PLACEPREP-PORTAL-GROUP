@@ -92,6 +92,10 @@ cd dashboard/faculty-dashboard
 npm install && npm run dev
 ```
 
+## Admin portal
+cd dashboard/admin-portal
+npm install && npm run dev
+
 ## Status
 
 | Component | Status |
