@@ -150,9 +150,9 @@ export default function DashboardPage() {
           <div className="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col overflow-hidden h-full">
             <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
               <h2 className="font-bold text-gray-900">Curriculum Gap Matrix Preview</h2>
-              <Link href="/curriculum" className="text-blue-600 font-medium text-sm hover:underline flex items-center gap-1">
+              {/* <Link href="/curriculum" className="text-blue-600 font-medium text-sm hover:underline flex items-center gap-1">
                 View Full Matrix <ArrowRight className="w-4 h-4" />
-              </Link>
+              </Link>  */}
             </div>
             
             <div className="p-5 overflow-x-auto">

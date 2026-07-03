@@ -10,7 +10,7 @@ const pageTitles: Record<string, string> = {
   "/": "Dashboard",
   "/requests": "Session Requests",
   "/doubts": "Doubts & Questions",
-  "/curriculum": "Curriculum Gap Matrix",
+  // "/curriculum": "Curriculum Gap Matrix",
   "/trends": "Industry Trends",
   "/rankings": "Company Rankings",
   "/reports": "Export Reports",
