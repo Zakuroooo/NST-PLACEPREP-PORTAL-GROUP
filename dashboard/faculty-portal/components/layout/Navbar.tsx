@@ -11,7 +11,7 @@ const pageTitles: Record<string, string> = {
   "/requests": "Session Requests",
   "/doubts": "Doubts & Questions",
   // "/curriculum": "Curriculum Gap Matrix",
-  "/trends": "Industry Trends",
+  // "/trends": "Industry Trends",
   "/rankings": "Company Rankings",
   "/reports": "Export Reports",
   "/profile": "Profile",

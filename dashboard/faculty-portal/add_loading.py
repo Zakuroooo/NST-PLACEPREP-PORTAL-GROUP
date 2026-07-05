@@ -5,7 +5,7 @@ files = [
     "app/requests/page.tsx",
     "app/doubts/page.tsx",
     # "app/curriculum/page.tsx",
-    "app/trends/page.tsx",
+    # "app/trends/page.tsx",
     "app/rankings/page.tsx",
     "app/reports/page.tsx"
 ]

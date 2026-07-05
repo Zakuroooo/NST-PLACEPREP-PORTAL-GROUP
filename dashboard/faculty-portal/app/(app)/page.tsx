@@ -8,18 +8,24 @@ import {
   AlertTriangle, 
   Clock, CheckCircle2, 
   ArrowRight,
-  Server, Cloud, Database, Radar
+  Server, Cloud, Database, Radar,
+  BookOpen, MessageSquare, Activity
 } from "lucide-react";
-import { mockCurriculumCoverage } from "@/lib/mock-data";
+import { computeOverall, mockCurriculumCoverage } from "@/lib/mock-data";
 import { mockTrendAlerts } from "@/lib/mock-data";
+import { mockFacultyMembers, CURRENT_FACULTY_ID } from "@/lib/facultyMembers";
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedYear, setSelectedYear] = useState<"current" | "previous">("current");
+  const [hoveredSubject, setHoveredSubject] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(t);
   }, []);
+
+  const currentFaculty = mockFacultyMembers.find(f => f.id === CURRENT_FACULTY_ID) || mockFacultyMembers[0];
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
@@ -51,13 +57,101 @@ export default function DashboardPage() {
     return mockCurriculumCoverage.find(s => s.subjectName === subjectName);
   };
 
-  // We are asked to specifically render 3 rows:
-  // Row 1: System Design
-  // Row 2: Cloud Computing
-  // Row 3: Data Structures (maps to "Data Structures & Algo")
+  // We are asked to specifically render 3 rows in matrix preview:
   const sysDesign = getCoverageData("System Design");
   const cloudComp = getCoverageData("Cloud Computing");
   const dsa = getCoverageData("Data Structures & Algo");
+
+  const getSubjectCoverageByName = (name: string) => {
+    const searchName = name.toLowerCase();
+    const coverage = mockCurriculumCoverage.find(s => {
+      const sName = s.subjectName.toLowerCase();
+      return sName.includes(searchName) || searchName.includes(sName) ||
+        (searchName === "dsa" && sName.includes("data structures")) ||
+        (searchName === "web development" && sName.includes("web dev")) ||
+        (searchName === "web dev" && sName.includes("web dev"));
+    });
+    
+    if (!coverage) {
+      return {
+        subjectName: name,
+        courseCode: "CS101",
+        alignment: 50,
+        status: "Moderate",
+        color: "#2563eb",
+        bgColor: "bg-blue-50",
+        borderColor: "border-blue-200",
+        textColor: "text-blue-600",
+        id: name.toLowerCase().replace(/\s+/g, ""),
+      };
+    }
+    
+    let alignment = 0;
+    if (coverage.subjectName.includes("Data Structures")) alignment = 95;
+    else if (coverage.subjectName.includes("System Design")) alignment = 30;
+    else if (coverage.subjectName.includes("DBMS")) alignment = 75;
+    else if (coverage.subjectName.includes("Web Dev")) alignment = 60;
+    else if (coverage.subjectName.includes("OS & Networks")) alignment = 80;
+    else if (coverage.subjectName.includes("Cloud Computing")) alignment = 85;
+    else alignment = computeOverall(coverage.coverage);
+    
+    let status = "Aligned";
+    let color = "#10b981"; // emerald
+    let bgColor = "bg-emerald-50";
+    let borderColor = "border-emerald-200";
+    let textColor = "text-emerald-600";
+    
+    if (alignment < 40) {
+      status = "Critical";
+      color = "#f43f5e"; // rose
+      bgColor = "bg-rose-50";
+      borderColor = "border-rose-200";
+      textColor = "text-rose-600";
+    } else if (alignment < 75) {
+      status = "Moderate";
+      color = "#2563eb"; // blue-600
+      bgColor = "bg-blue-50";
+      borderColor = "border-blue-200";
+      textColor = "text-blue-600";
+    }
+    
+    return {
+      subjectName: coverage.subjectName,
+      courseCode: coverage.courseCode,
+      alignment,
+      status,
+      color,
+      bgColor,
+      borderColor,
+      textColor,
+      id: name.toLowerCase().replace(/\s+/g, ""),
+    };
+  };
+
+  const resolvedSubjects = currentFaculty.subjects
+    .map(getSubjectCoverageByName)
+    .sort((a, b) => a.courseCode.localeCompare(b.courseCode));
+
+  const getTailwindClasses = (status: string) => {
+    switch (status) {
+      case "Critical":
+        return {
+          cardBgHover: "hover:bg-rose-50/40 hover:border-rose-300",
+          cardActive: "bg-rose-50 border-rose-400 shadow-sm scale-[1.01]",
+        };
+      case "Moderate":
+        return {
+          cardBgHover: "hover:bg-blue-50/40 hover:border-blue-300",
+          cardActive: "bg-blue-50 border-blue-400 shadow-sm scale-[1.01]",
+        };
+      case "Aligned":
+      default:
+        return {
+          cardBgHover: "hover:bg-emerald-50/40 hover:border-emerald-300",
+          cardActive: "bg-emerald-50 border-emerald-400 shadow-sm scale-[1.01]",
+        };
+    }
+  };
 
   return (
     <div className="max-w-7xl mx-auto pb-20">
@@ -79,11 +173,13 @@ export default function DashboardPage() {
 
       {isLoading ? (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="h-32 bg-gray-100 animate-pulse rounded-xl"></div>
             <div className="h-32 bg-gray-100 animate-pulse rounded-xl"></div>
             <div className="h-32 bg-gray-100 animate-pulse rounded-xl"></div>
             <div className="h-32 bg-gray-100 animate-pulse rounded-xl"></div>
           </div>
+          <div className="h-44 bg-gray-100 animate-pulse rounded-xl"></div>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 h-96 bg-gray-100 animate-pulse rounded-xl"></div>
             <div className="lg:col-span-1 h-96 bg-gray-100 animate-pulse rounded-xl"></div>
@@ -91,54 +187,348 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-      {/* Top Row: 3 KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        {/* Subjects Analyzed */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-blue-600 transition-colors">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 rounded-lg bg-gray-50 text-gray-700 flex items-center justify-center">
-              <FileText className="w-5 h-5" />
-            </div>
-            <span className="text-emerald-700 bg-emerald-50 text-xs px-2 py-0.5 rounded flex items-center gap-1 font-semibold border border-emerald-100">
-              <ArrowUp className="w-3 h-3" /> 2
+      {/* Top Row: KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        {/* Subjects — LeetCode Open-Arc Donut Style */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative col-span-1 lg:col-span-2 hover:border-blue-500 hover:shadow-md transition-all duration-200">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-5">
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-blue-600" />
+              Assigned Subjects
+            </h3>
+            <span className="text-blue-700 bg-blue-50 text-[10px] px-2.5 py-0.5 rounded-full font-semibold border border-blue-100 uppercase tracking-wider">
+              Curriculum Map
             </span>
           </div>
-          <div>
-            <p className="text-sm text-gray-500 mb-1 font-medium">Subjects Analyzed</p>
-            <p className="text-3xl font-bold text-gray-900">12</p>
+
+          <div className="flex items-center gap-8">
+            {/* 270° Open-Arc Donut Ring */}
+            <div className="relative flex items-center justify-center shrink-0 w-40 h-40 p-2">
+              <svg className="w-full h-full overflow-visible" viewBox="0 0 120 120">
+                {/*
+                  270° arc: circumference = 2π*50 = 314.16
+                  270° portion = 314.16 * 3/4 = 235.62
+                  Rotation 135° so the gap sits at the bottom.
+                  All circles share transform="rotate(135, 60, 60)"
+                */}
+
+                {/* ── DEFAULT STATE: dynamic segments ── */}
+                {/* Gray track (270°) */}
+                <circle
+                  cx="60" cy="60" r="50"
+                  fill="transparent"
+                  stroke="#C4C9D4"
+                  strokeWidth="8"
+                  strokeDasharray="235.62 314.16"
+                  strokeLinecap="round"
+                  transform="rotate(135, 60, 60)"
+                  style={{
+                    opacity: hoveredSubject === null ? 1 : 0,
+                    transition: "opacity 0.35s ease",
+                  }}
+                />
+
+                {(() => {
+                  let accumulatedOffset = 0;
+                  return resolvedSubjects.map((sub, idx) => {
+                    const totalMax = resolvedSubjects.length * 100;
+                    const gap = 2.5;
+                    const arcLen = (sub.alignment / totalMax) * 235.62;
+                    const offset = accumulatedOffset;
+                    
+                    // Increment offset for the next segment
+                    accumulatedOffset += arcLen + gap;
+                    
+                    return (
+                      <circle
+                        key={`def-${sub.id}`}
+                        cx="60" cy="60" r="50"
+                        fill="transparent"
+                        stroke={sub.color}
+                        strokeWidth="8"
+                        strokeDasharray={`${arcLen} 314.16`}
+                        strokeDashoffset={`-${offset}`}
+                        strokeLinecap="round"
+                        transform="rotate(135, 60, 60)"
+                        style={{
+                          opacity: hoveredSubject === null ? 1 : 0,
+                          transition: "opacity 0.35s ease",
+                        }}
+                      />
+                    );
+                  });
+                })()}
+
+                {/* ── HOVER STATE: dim track + single bright arc ── */}
+                {/* Dim track shown when hovering */}
+                <circle
+                  cx="60" cy="60" r="50"
+                  fill="transparent"
+                  stroke="#C4C9D4"
+                  strokeWidth="8"
+                  strokeDasharray="235.62 314.16"
+                  strokeLinecap="round"
+                  transform="rotate(135, 60, 60)"
+                  style={{
+                    opacity: hoveredSubject !== null ? 0.7 : 0,
+                    transition: "opacity 0.35s ease",
+                  }}
+                />
+
+                {resolvedSubjects.map((sub) => {
+                  const arcLen = (sub.alignment / 100) * 235.62;
+                  return (
+                    <circle
+                      key={`hov-${sub.id}`}
+                      cx="60" cy="60" r="50"
+                      fill="transparent"
+                      stroke={sub.color}
+                      strokeWidth="10"
+                      strokeDasharray={`${arcLen} 314.16`}
+                      strokeDashoffset="0"
+                      strokeLinecap="round"
+                      transform="rotate(135, 60, 60)"
+                      style={{
+                        opacity: hoveredSubject === sub.id ? 1 : 0,
+                        filter: hoveredSubject === sub.id ? `drop-shadow(0 0 5px ${sub.color}bb)` : "none",
+                        transition: "opacity 0.35s ease",
+                      }}
+                    />
+                  );
+                })}
+              </svg>
+
+              {/* Center Stats */}
+              <div className="absolute flex flex-col items-center justify-center text-center px-2" style={{ transition: "all 0.3s ease" }}>
+                {hoveredSubject === null ? (
+                  <>
+                    <span className="text-3xl font-black text-gray-900 leading-tight">{resolvedSubjects.length}</span>
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Subjects</span>
+                    <span className="text-[10px] text-emerald-600 font-semibold mt-1">
+                      {Math.round(resolvedSubjects.reduce((acc, s) => acc + s.alignment, 0) / resolvedSubjects.length)}% Avg
+                    </span>
+                  </>
+                ) : (
+                  (() => {
+                    const activeSub = resolvedSubjects.find(s => s.id === hoveredSubject);
+                    if (!activeSub) return null;
+                    const whole = Math.floor(activeSub.alignment);
+                    const decimal = Math.round((activeSub.alignment % 1) * 10);
+                    return (
+                      <>
+                        <span className="text-[10px] text-gray-500 font-semibold mb-0.5">Alignment</span>
+                        <div className="flex items-baseline gap-0">
+                          <span className="text-[28px] font-black leading-none" style={{ color: activeSub.color }}>
+                            {whole}
+                          </span>
+                          <span className="text-sm font-bold leading-none" style={{ color: activeSub.color }}>
+                            .{decimal}%
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-gray-400 font-medium mt-1.5">{activeSub.alignment} Completed</span>
+                      </>
+                    );
+                  })()
+                )}
+              </div>
+            </div>
+
+            {/* Right Stat Cards */}
+            <div className="flex flex-col gap-1.5 flex-grow max-h-[170px] overflow-y-auto pr-1">
+              {resolvedSubjects.map((sub) => {
+                const classes = getTailwindClasses(sub.status);
+                const isHovered = hoveredSubject === sub.id;
+                const isAnyHovered = hoveredSubject !== null;
+                
+                return (
+                  <div
+                    key={`card-${sub.id}`}
+                    className={`rounded-lg px-3 py-2 flex items-center justify-between border transition-all duration-200 cursor-pointer ${
+                      isHovered
+                        ? classes.cardActive
+                        : isAnyHovered
+                        ? "bg-gray-50 border-gray-200 opacity-40"
+                        : `bg-gray-50 border-gray-200 hover:bg-gray-100/50 ${classes.cardBgHover}`
+                    }`}
+                    onMouseEnter={() => setHoveredSubject(sub.id)}
+                    onMouseLeave={() => setHoveredSubject(null)}
+                  >
+                    <div>
+                      <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${sub.textColor}`}>{sub.subjectName}</p>
+                      <p className="text-gray-900 font-bold text-xs">{sub.alignment}<span className="text-gray-400 font-normal text-[10px]">/100</span></p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[9px] text-gray-400 font-medium">{sub.courseCode}</p>
+                      <p className={`text-[9px] font-bold ${sub.textColor}`}>
+                        {sub.status} {sub.status === "Aligned" ? "✓" : sub.status === "Critical" ? "⚠" : ""}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Critical Gaps Found */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-red-500 transition-colors">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
-              <AlertTriangle className="w-5 h-5" />
-            </div>
-            <span className="text-red-700 bg-red-50 text-xs px-2 py-0.5 rounded flex items-center gap-1 font-semibold border border-red-100">
-              Needs Review
-            </span>
-          </div>
+
+        {/* Doubts Solved */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-emerald-500 transition-all duration-200 hover:shadow-md flex flex-col justify-between">
           <div>
-            <p className="text-sm text-gray-500 mb-1 font-medium">Critical Gaps Found</p>
-            <p className="text-3xl font-bold text-gray-900">5</p>
+            <div className="flex justify-between items-start mb-3">
+              <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <MessageSquare className="w-5 h-5" />
+              </div>
+              <span className="text-emerald-700 bg-emerald-50 text-[10px] px-2 py-0.5 rounded-full font-semibold border border-emerald-100 uppercase tracking-wider">
+                +{currentFaculty.doubtsSolvedThisMonth} this month
+              </span>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Doubts Solved</p>
+              <p className="text-3xl font-bold text-gray-900 mb-2">{currentFaculty.doubtsSolvedAllTime}</p>
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 font-medium pt-2 border-t border-gray-100 mt-2">
+            Excellent resolution rate
           </div>
         </div>
 
-        {/* Last Data Sync */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative overflow-hidden">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 rounded-lg bg-gray-50 text-gray-700 flex items-center justify-center">
-              <Clock className="w-5 h-5" />
+        {/* Overall Activity & Status */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-amber-500 transition-all duration-200 hover:shadow-md flex flex-col justify-between">
+          <div>
+            <div className="flex justify-between items-start mb-3">
+              <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Activity className="w-5 h-5" />
+              </div>
+              <span className="text-amber-700 bg-amber-50 text-[10px] px-2 py-0.5 rounded-full font-semibold border border-amber-100 uppercase tracking-wider">
+                Top 5% Faculty
+              </span>
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Overall Activity</p>
+              <p className="text-3xl font-bold text-gray-900 mb-2">94%</p>
             </div>
           </div>
+          <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
+            <span className="text-gray-400 font-medium flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> Synced 2h ago
+            </span>
+            <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
+              <CheckCircle2 className="w-3 h-3" /> Live
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Heatmap Section */}
+      <div className="bg-white border border-gray-200 rounded-xl shadow-sm p-5 mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 border-b border-gray-100 pb-3">
           <div>
-            <p className="text-sm text-gray-500 mb-1 font-medium">Last Data Sync</p>
-            <p className="text-3xl font-bold text-gray-900">2h ago</p>
-            <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1 font-medium">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Automated sync active
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <Activity className="w-4 h-4 text-emerald-600" />
+              Faculty Activity Tracker
+            </h3>
+            <p className="text-xs text-gray-500">
+              {selectedYear === "current" ? "145 doubts resolved and 12 mock sessions in the past year" : "98 doubts resolved and 8 mock sessions in the previous year"}
             </p>
           </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 text-xs font-semibold text-gray-600 w-full sm:w-auto">
+            <div className="flex gap-4">
+              <span>Total active days: <strong className="text-gray-900">{selectedYear === "current" ? "112" : "84"}</strong></span>
+              <span>•</span>
+              <span>Max streak: <strong className="text-gray-900">{selectedYear === "current" ? "18 days" : "12 days"}</strong></span>
+            </div>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value as "current" | "previous")}
+              className="bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold text-xs py-1.5 px-3 rounded-lg transition-all outline-none cursor-pointer shadow-sm w-full sm:w-auto text-center"
+            >
+              <option value="current">Current Year</option>
+              <option value="previous">Previous Year</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto pb-2 animate-fade-in flex justify-center">
+          <div className="flex flex-col items-center">
+            {/* Heatmap Grid grouped by months */}
+            <div className="flex items-start">
+              {/* Month Blocks */}
+              <div className="flex gap-3.5">
+                {[
+                  { name: "Jul", weeksCount: 4, label: "Jul" },
+                  { name: "Aug", weeksCount: 4, label: "Aug" },
+                  { name: "Sep", weeksCount: 4, label: "Sep" },
+                  { name: "Oct", weeksCount: 5, label: "Oct" },
+                  { name: "Nov", weeksCount: 4, label: "Nov" },
+                  { name: "Dec", weeksCount: 4, label: "Dec" },
+                  { name: "Jan", weeksCount: 5, label: "Jan" },
+                  { name: "Feb", weeksCount: 4, label: "Feb" },
+                  { name: "Mar", weeksCount: 4, label: "Mar" },
+                  { name: "Apr", weeksCount: 4, label: "Apr" },
+                  { name: "May", weeksCount: 5, label: "May" },
+                  { name: "Jun", weeksCount: 5, label: "Jun" }
+                ].map((month, mIdx) => (
+                  <div key={mIdx} className="flex flex-col items-center gap-2">
+                    {/* Month Weeks Container */}
+                    <div className="flex gap-[3px]">
+                      {Array.from({ length: month.weeksCount }).map((_, wIdx) => (
+                        <div key={wIdx} className="flex flex-col gap-[3px]">
+                          {Array.from({ length: 7 }).map((_, dIndex) => {
+                            // Seed based on selectedYear
+                            const seed = selectedYear === "current" ? 13 : 17;
+                            const val = (mIdx * 19 + wIdx * 7 + dIndex * seed) % 15;
+                            let level = 0;
+                            if (selectedYear === "previous") {
+                              if (val === 1 || val === 4) level = 1;
+                              if (val === 2) level = 2;
+                              if (val === 8) level = 3;
+                              if (val === 14) level = 4;
+                            } else {
+                              if (val === 2 || val === 5 || val === 9) level = 1;
+                              if (val === 3 || val === 7) level = 2;
+                              if (val === 8) level = 3;
+                              if (val === 11) level = 4;
+                            }
+                            
+                            return (
+                              <div
+                                key={dIndex}
+                                className={`w-[9px] h-[9px] rounded-[1.5px] transition-all hover:scale-125 duration-100 cursor-pointer ${
+                                  level === 1 ? "bg-emerald-100" :
+                                  level === 2 ? "bg-emerald-300" :
+                                  level === 3 ? "bg-emerald-500" :
+                                  level === 4 ? "bg-emerald-700" :
+                                  "bg-gray-100"
+                                }`}
+                                title={`${month.name} week ${wIdx + 1}, day ${dIndex + 1}: ${level === 0 ? "No" : level} activity`}
+                              />
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {/* Month Label */}
+                    <div className="h-6 flex items-center justify-center mt-1">
+                      <span className="text-[10px] text-gray-400 font-bold tracking-wider">{month.label}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Legend */}
+        <div className="flex justify-center items-center gap-1.5 text-[10px] text-gray-400 mt-3 font-medium">
+          <span>Less</span>
+          <div className="w-[9px] h-[9px] rounded-[1.5px] bg-gray-100" />
+          <div className="w-[9px] h-[9px] rounded-[1.5px] bg-emerald-100" />
+          <div className="w-[9px] h-[9px] rounded-[1.5px] bg-emerald-300" />
+          <div className="w-[9px] h-[9px] rounded-[1.5px] bg-emerald-500" />
+          <div className="w-[9px] h-[9px] rounded-[1.5px] bg-emerald-700" />
+          <span>More</span>
         </div>
       </div>
 
@@ -314,9 +704,9 @@ export default function DashboardPage() {
             </div>
             
             <div className="p-4 border-t border-gray-200 bg-gray-50">
-              <Link href="/trends" className="block w-full text-blue-600 font-medium text-sm py-2 rounded hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200">
+              {/* <Link href="/trends" className="block w-full text-blue-600 font-medium text-sm py-2 rounded hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200">
                 View All Insights <ArrowRight className="w-4 h-4 inline-block ml-1 align-text-bottom" />
-              </Link>
+              </Link> */}
             </div>
           </div>
         </div>
