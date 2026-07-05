@@ -19,7 +19,7 @@ const navigation = [
   { name: "Session Requests", href: "/requests", icon: CalendarDays },
   { name: "Doubts & Questions", href: "/doubts", icon: MessageCircle },
   // { name: "Curriculum Gap Matrix", href: "/curriculum", icon: Map },
-  { name: "Industry Trends", href: "/trends", icon: TrendingUp },
+  // { name: "Industry Trends", href: "/trends", icon: TrendingUp },
   { name: "Company Rankings", href: "/rankings", icon: Building2 },
   { name: "Export Reports", href: "/reports", icon: Send },
 ];
