@@ -12,7 +12,7 @@ export const mockFacultyMembers: FacultyMember[] = [
   {
     id: "f1",
     name: "Prof. Sharma",
-    subjects: ["DSA", "System Design", "Web Development"],
+    subjects: ["DSA", "System Design", "Web Development", "DBMS & SQL", "Cloud Computing"],
     doubtsSolvedThisMonth: 12,
     doubtsSolvedAllTime: 145,
   }
