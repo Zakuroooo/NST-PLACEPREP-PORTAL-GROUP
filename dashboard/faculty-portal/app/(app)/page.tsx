@@ -128,30 +128,72 @@ export default function DashboardPage() {
     };
   };
 
+  const subjectColors = [
+    {
+      color: "#10b981", // Emerald
+      bgColor: "bg-emerald-50",
+      borderColor: "border-emerald-200",
+      textColor: "text-emerald-600",
+      hoverBg: "hover:bg-emerald-50/40 hover:border-emerald-300",
+      activeBg: "bg-emerald-50 border-emerald-400 shadow-sm scale-[1.01]",
+    },
+    {
+      color: "#2563eb", // Blue
+      bgColor: "bg-blue-50",
+      borderColor: "border-blue-200",
+      textColor: "text-blue-600",
+      hoverBg: "hover:bg-blue-50/40 hover:border-blue-300",
+      activeBg: "bg-blue-50 border-blue-400 shadow-sm scale-[1.01]",
+    },
+    {
+      color: "#f43f5e", // Rose
+      bgColor: "bg-rose-50",
+      borderColor: "border-rose-200",
+      textColor: "text-rose-600",
+      hoverBg: "hover:bg-rose-50/40 hover:border-rose-300",
+      activeBg: "bg-rose-50 border-rose-400 shadow-sm scale-[1.01]",
+    },
+    {
+      color: "#8b5cf6", // Purple
+      bgColor: "bg-purple-50",
+      borderColor: "border-purple-200",
+      textColor: "text-purple-600",
+      hoverBg: "hover:bg-purple-50/40 hover:border-purple-300",
+      activeBg: "bg-purple-50 border-purple-400 shadow-sm scale-[1.01]",
+    },
+    {
+      color: "#f59e0b", // Amber
+      bgColor: "bg-amber-50",
+      borderColor: "border-amber-200",
+      textColor: "text-amber-600",
+      hoverBg: "hover:bg-amber-50/40 hover:border-amber-300",
+      activeBg: "bg-amber-50 border-amber-400 shadow-sm scale-[1.01]",
+    },
+    {
+      color: "#06b6d4", // Cyan
+      bgColor: "bg-cyan-50",
+      borderColor: "border-cyan-200",
+      textColor: "text-cyan-600",
+      hoverBg: "hover:bg-cyan-50/40 hover:border-cyan-300",
+      activeBg: "bg-cyan-50 border-cyan-400 shadow-sm scale-[1.01]",
+    },
+  ];
+
   const resolvedSubjects = currentFaculty.subjects
     .map(getSubjectCoverageByName)
-    .sort((a, b) => a.courseCode.localeCompare(b.courseCode));
-
-  const getTailwindClasses = (status: string) => {
-    switch (status) {
-      case "Critical":
-        return {
-          cardBgHover: "hover:bg-rose-50/40 hover:border-rose-300",
-          cardActive: "bg-rose-50 border-rose-400 shadow-sm scale-[1.01]",
-        };
-      case "Moderate":
-        return {
-          cardBgHover: "hover:bg-blue-50/40 hover:border-blue-300",
-          cardActive: "bg-blue-50 border-blue-400 shadow-sm scale-[1.01]",
-        };
-      case "Aligned":
-      default:
-        return {
-          cardBgHover: "hover:bg-emerald-50/40 hover:border-emerald-300",
-          cardActive: "bg-emerald-50 border-emerald-400 shadow-sm scale-[1.01]",
-        };
-    }
-  };
+    .sort((a, b) => a.courseCode.localeCompare(b.courseCode))
+    .map((sub, idx) => {
+      const palette = subjectColors[idx % subjectColors.length];
+      return {
+        ...sub,
+        color: palette.color,
+        bgColor: palette.bgColor,
+        borderColor: palette.borderColor,
+        textColor: palette.textColor,
+        hoverBg: palette.hoverBg,
+        activeBg: palette.activeBg,
+      };
+    });
 
   return (
     <div className="max-w-7xl mx-auto pb-20">
@@ -337,7 +379,6 @@ export default function DashboardPage() {
             {/* Right Stat Cards */}
             <div className="flex flex-col gap-1.5 flex-grow max-h-[170px] overflow-y-auto pr-1">
               {resolvedSubjects.map((sub) => {
-                const classes = getTailwindClasses(sub.status);
                 const isHovered = hoveredSubject === sub.id;
                 const isAnyHovered = hoveredSubject !== null;
                 
@@ -346,10 +387,10 @@ export default function DashboardPage() {
                     key={`card-${sub.id}`}
                     className={`rounded-lg px-3 py-2 flex items-center justify-between border transition-all duration-200 cursor-pointer ${
                       isHovered
-                        ? classes.cardActive
+                        ? sub.activeBg
                         : isAnyHovered
                         ? "bg-gray-50 border-gray-200 opacity-40"
-                        : `bg-gray-50 border-gray-200 hover:bg-gray-100/50 ${classes.cardBgHover}`
+                        : `bg-gray-50 border-gray-200 hover:bg-gray-100/50 ${sub.hoverBg}`
                     }`}
                     onMouseEnter={() => setHoveredSubject(sub.id)}
                     onMouseLeave={() => setHoveredSubject(null)}
