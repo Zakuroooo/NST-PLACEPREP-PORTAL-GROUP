@@ -2,6 +2,14 @@
 
 A unified data-driven portal with two distinct use cases — helping NST students prepare for technical interviews at specific companies, and helping faculty align the B.Tech CS & AI curriculum with what industry actually tests and hires for.
 
+## Live Deployments
+
+| Portal | URL |
+|--------|-----|
+| 🧑‍🎓 Student Portal | https://nst-prepportal-frontend.vercel.app/ |
+| 👨‍🏫 Faculty Portal | https://nst-prepportal-frontend-khaki.vercel.app/ |
+| 👨‍💼 Admin Portal | https://nst-prepportal-frontend-fs6o.vercel.app/ |
+
 ---
 
 ## Project Overview
