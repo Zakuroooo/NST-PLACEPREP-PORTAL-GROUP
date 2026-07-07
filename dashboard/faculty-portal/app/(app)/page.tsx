@@ -20,10 +20,40 @@ export default function DashboardPage() {
   const [selectedYear, setSelectedYear] = useState<"current" | "previous">("current");
   const [hoveredSubject, setHoveredSubject] = useState<string | null>(null);
 
+  // Interactive dashboard states
+  const [currentSemester, setCurrentSemester] = useState("Fall 2024");
+  const [semesterDropdownOpen, setSemesterDropdownOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [showSyncToast, setShowSyncToast] = useState(false);
+
   useEffect(() => {
     const t = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(t);
   }, []);
+
+  const handleSyncData = () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    setTimeout(() => {
+      setIsSyncing(false);
+      setShowSyncToast(true);
+      setTimeout(() => setShowSyncToast(false), 3000);
+    }, 1200);
+  };
+
+  // Adjust statistics dynamically based on semester selection
+  let avgModifier = 0;
+  let overallActivityVal = 94;
+  let doubtsModifier = 0;
+  if (currentSemester === "Spring 2024") {
+    avgModifier = -4;
+    overallActivityVal = 88;
+    doubtsModifier = -25;
+  } else if (currentSemester === "Fall 2023") {
+    avgModifier = -9;
+    overallActivityVal = 81;
+    doubtsModifier = -60;
+  }
 
   const currentFaculty = mockFacultyMembers.find(f => f.id === CURRENT_FACULTY_ID) || mockFacultyMembers[0];
 
@@ -203,15 +233,50 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold text-gray-900 mb-1">Curriculum Intelligence Dashboard</h1>
           <p className="text-sm text-gray-500">Real-time alignment between academic programs and industry hiring requirements.</p>
         </div>
-        <div className="flex gap-3">
-          <button className="bg-white border border-gray-300 text-gray-700 font-medium text-sm py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 shadow-sm">
-            Fall 2024 <ChevronDown className="w-4 h-4" />
-          </button>
-          <button className="bg-black text-white font-medium text-sm py-2 px-4 rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 shadow-sm">
-            <RefreshCw className="w-4 h-4" /> Sync Data
+        <div className="flex gap-3 relative">
+          {/* Semester Selector Dropdown */}
+          <div className="relative">
+            <button 
+              onClick={() => setSemesterDropdownOpen(!semesterDropdownOpen)}
+              className="bg-white border border-gray-300 text-gray-700 font-medium text-sm py-2 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 shadow-sm cursor-pointer"
+            >
+              {currentSemester} <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${semesterDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {semesterDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-40 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-100">
+                {["Fall 2024", "Spring 2024", "Fall 2023"].map((sem) => (
+                  <button
+                    key={sem}
+                    onClick={() => {
+                      setCurrentSemester(sem);
+                      setSemesterDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-4 py-2 text-xs font-semibold hover:bg-gray-50 transition-colors ${currentSemester === sem ? 'text-blue-600 bg-blue-50/50' : 'text-gray-700'}`}
+                  >
+                    {sem}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button 
+            onClick={handleSyncData}
+            disabled={isSyncing}
+            className="bg-black text-white font-medium text-sm py-2 px-4 rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 shadow-sm disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+            {isSyncing ? 'Syncing...' : 'Sync Data'}
           </button>
         </div>
       </div>
+
+      {showSyncToast && (
+        <div className="fixed top-4 right-4 bg-emerald-600 text-white font-bold text-xs px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-in slide-in-from-top-5 duration-200">
+          <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <span>Curriculum alignment data synced successfully!</span>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="space-y-6">
@@ -348,7 +413,7 @@ export default function DashboardPage() {
                     <span className="text-3xl font-black text-gray-900 leading-tight">{resolvedSubjects.length}</span>
                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Subjects</span>
                     <span className="text-[10px] text-emerald-600 font-semibold mt-1">
-                      {Math.round(resolvedSubjects.reduce((acc, s) => acc + s.alignment, 0) / resolvedSubjects.length)}% Avg
+                      {Math.round(resolvedSubjects.reduce((acc, s) => acc + s.alignment, 0) / resolvedSubjects.length) + avgModifier}% Avg
                     </span>
                   </>
                 ) : (
@@ -426,7 +491,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Doubts Solved</p>
-              <p className="text-3xl font-bold text-gray-900 mb-2">{currentFaculty.doubtsSolvedAllTime}</p>
+              <p className="text-3xl font-bold text-gray-900 mb-2">{currentFaculty.doubtsSolvedAllTime + doubtsModifier}</p>
             </div>
           </div>
           <div className="text-xs text-gray-500 font-medium pt-2 border-t border-gray-100 mt-2">
@@ -447,12 +512,12 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Overall Activity</p>
-              <p className="text-3xl font-bold text-gray-900 mb-2">94%</p>
+              <p className="text-3xl font-bold text-gray-900 mb-2">{overallActivityVal}%</p>
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
             <span className="text-gray-400 font-medium flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> Synced 2h ago
+              <Clock className="w-3.5 h-3.5" /> Synced {isSyncing ? "just now" : "2h ago"}
             </span>
             <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
               <CheckCircle2 className="w-3 h-3" /> Live
