@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { 
-  ChevronDown, RefreshCw, 
+  ChevronDown, ChevronUp, RefreshCw, 
   FileText, ArrowUp, 
   AlertTriangle, 
   Clock, CheckCircle2, 
@@ -19,6 +19,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedYear, setSelectedYear] = useState<"current" | "previous">("current");
   const [hoveredSubject, setHoveredSubject] = useState<string | null>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Interactive dashboard states
   const [currentSemester, setCurrentSemester] = useState("Fall 2024");
@@ -639,181 +640,57 @@ export default function DashboardPage() {
       </div>
 
       {/* Main Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="w-full">
         
-        {/* Left Panel: Gap Matrix Preview */}
-        <div className="lg:col-span-2 flex flex-col h-full">
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col overflow-hidden h-full">
-            <div className="p-5 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-              <h2 className="font-bold text-gray-900">Curriculum Gap Matrix Preview</h2>
-              {/* <Link href="/curriculum" className="text-blue-600 font-medium text-sm hover:underline flex items-center gap-1">
-                View Full Matrix <ArrowRight className="w-4 h-4" />
-              </Link>  */}
-            </div>
-            
-            <div className="p-5 overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[500px]">
-                <thead>
-                  <tr className="border-b border-gray-200 text-xs uppercase tracking-wider font-bold text-gray-500">
-                    <th className="py-3 px-4 w-1/3">Subject Area</th>
-                    <th className="py-3 px-4">Industry Demand</th>
-                    <th className="py-3 px-4">Curriculum Coverage</th>
-                    <th className="py-3 px-4 text-right">Gap Severity</th>
-                  </tr>
-                </thead>
-                <tbody className="text-sm">
-                  
-                  {/* Row 1: System Design */}
-                  <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-700">
-                          <Server className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">{sysDesign?.subjectName || "System Design"}</p>
-                          <p className="text-xs text-gray-500">{sysDesign?.courseCode || "CS402"}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 max-w-[80px]">
-                          <div className="bg-gray-900 h-1.5 rounded-full" style={{ width: "95%" }}></div>
-                        </div>
-                        <span className="text-gray-600 text-xs font-medium">High</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 max-w-[80px]">
-                          <div className="bg-gray-400 h-1.5 rounded-full" style={{ width: "30%" }}></div>
-                        </div>
-                        <span className="text-gray-600 text-xs font-medium">Low</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      {getSeverityBadge("Critical")}
-                    </td>
-                  </tr>
-
-                  {/* Row 2: Cloud Computing */}
-                  <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-700">
-                          <Cloud className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">{cloudComp?.subjectName || "Cloud Computing"}</p>
-                          <p className="text-xs text-gray-500">{cloudComp?.courseCode || "CS305"}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 max-w-[80px]">
-                          <div className="bg-gray-900 h-1.5 rounded-full" style={{ width: "85%" }}></div>
-                        </div>
-                        <span className="text-gray-600 text-xs font-medium">High</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 max-w-[80px]">
-                          <div className="bg-amber-400 h-1.5 rounded-full" style={{ width: "60%" }}></div>
-                        </div>
-                        <span className="text-gray-600 text-xs font-medium">Med</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      {getSeverityBadge("Moderate")}
-                    </td>
-                  </tr>
-
-                  {/* Row 3: Data Structures */}
-                  <tr className="hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-gray-100 flex items-center justify-center text-gray-700">
-                          <Database className="w-4 h-4" />
-                        </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">Data Structures</p>
-                          <p className="text-xs text-gray-500">{dsa?.courseCode || "CS201"}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 max-w-[80px]">
-                          <div className="bg-gray-900 h-1.5 rounded-full" style={{ width: "90%" }}></div>
-                        </div>
-                        <span className="text-gray-600 text-xs font-medium">High</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-full bg-gray-200 rounded-full h-1.5 max-w-[80px]">
-                          <div className="bg-emerald-600 h-1.5 rounded-full" style={{ width: "95%" }}></div>
-                        </div>
-                        <span className="text-gray-600 text-xs font-medium">High</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-right">
-                      {getSeverityBadge("Aligned")}
-                    </td>
-                  </tr>
-
-                </tbody>
-              </table>
+        {/* Panel: Trend Alerts Feed */}
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm h-full flex flex-col">
+          <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+            <h2 className="font-bold text-gray-900 flex items-center gap-2">
+              <Radar className="w-5 h-5 text-blue-600" />
+              Recent Trend Alerts
+            </h2>
+          </div>
+          
+          <div className={`p-5 flex-grow overflow-y-auto transition-all duration-300 ${isExpanded ? "max-h-[1000px]" : "max-h-[450px]"}`}>
+            <div className="space-y-6 ml-3 border-l-2 border-gray-100">
+              {mockTrendAlerts.map((alert, index) => (
+                <div key={alert.id} className="relative pl-5">
+                  <div className={`absolute -left-[9px] top-0.5 w-4 h-4 rounded-full bg-white border-[3px] ${getAlertDot(alert.severity)}`}></div>
+                  <span className="text-xs text-gray-500 font-semibold block mb-1">
+                    {alert.timeAgo} • {alert.source}
+                  </span>
+                  <p className="font-semibold text-gray-900 mb-1 leading-snug">
+                    {alert.headline}
+                  </p>
+                  <p className="text-sm text-gray-500 mb-2 leading-relaxed">
+                    {alert.description}
+                  </p>
+                  {alert.tags && alert.tags.length > 0 && (
+                    <div className="flex gap-2 flex-wrap">
+                      {alert.tags.map(tag => (
+                        <span key={tag} className="text-[10px] bg-gray-50 px-2 py-0.5 rounded text-gray-650 font-semibold border border-gray-200 uppercase tracking-wide">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
-
-        {/* Right Panel: Trend Alerts Feed */}
-        <div className="lg:col-span-1">
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm h-full flex flex-col">
-            <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
-              <h2 className="font-bold text-gray-900 flex items-center gap-2">
-                <Radar className="w-5 h-5 text-blue-600" />
-                Recent Trend Alerts
-              </h2>
-            </div>
-            
-            <div className="p-5 flex-grow overflow-y-auto">
-              <div className="space-y-6 ml-3 border-l-2 border-gray-100">
-                {mockTrendAlerts.map((alert, index) => (
-                  <div key={alert.id} className="relative pl-5">
-                    <div className={`absolute -left-[9px] top-0.5 w-4 h-4 rounded-full bg-white border-[3px] ${getAlertDot(alert.severity)}`}></div>
-                    <span className="text-xs text-gray-500 font-semibold block mb-1">
-                      {alert.timeAgo} • {alert.source}
-                    </span>
-                    <p className="font-semibold text-gray-900 mb-1 leading-snug">
-                      {alert.headline}
-                    </p>
-                    <p className="text-sm text-gray-500 mb-2 leading-relaxed">
-                      {alert.description}
-                    </p>
-                    {alert.tags && alert.tags.length > 0 && (
-                      <div className="flex gap-2 flex-wrap">
-                        {alert.tags.map(tag => (
-                          <span key={tag} className="text-[10px] bg-gray-50 px-2 py-0.5 rounded text-gray-600 font-semibold border border-gray-200 uppercase tracking-wide">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            <div className="p-4 border-t border-gray-200 bg-gray-50">
-              {/* <Link href="/trends" className="block w-full text-blue-600 font-medium text-sm py-2 rounded hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200">
-                View All Insights <ArrowRight className="w-4 h-4 inline-block ml-1 align-text-bottom" />
-              </Link> */}
-            </div>
+          
+          <div className="p-4 border-t border-gray-200 bg-gray-50 shrink-0">
+            <button 
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="block w-full text-blue-600 font-bold text-xs py-2 rounded hover:bg-gray-100 transition-colors text-center border border-transparent hover:border-gray-200 cursor-pointer outline-none"
+            >
+              {isExpanded ? "Show Less Insights" : "View All Insights"}
+              {isExpanded ? (
+                <ChevronUp className="w-3.5 h-3.5 inline-block ml-1 align-text-bottom" />
+              ) : (
+                <ArrowRight className="w-3.5 h-3.5 inline-block ml-1 align-text-bottom" />
+              )}
+            </button>
           </div>
         </div>
 

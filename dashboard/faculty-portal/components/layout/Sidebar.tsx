@@ -11,6 +11,7 @@ import {
   Send,
   TrendingUp,
   LogOut,
+  LayoutList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,6 +21,7 @@ const navigation = [
   { name: "Doubts & Questions", href: "/doubts", icon: MessageCircle },
   // { name: "Curriculum Gap Matrix", href: "/curriculum", icon: Map },
   // { name: "Industry Trends", href: "/trends", icon: TrendingUp },
+  {name: "Student Matrix", href: "/students", icon: LayoutList},
   { name: "Company Rankings", href: "/rankings", icon: Building2 },
   { name: "Export Reports", href: "/reports", icon: Send },
 ];

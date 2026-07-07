@@ -16,6 +16,7 @@ const pageTitles: Record<string, string> = {
   "/reports": "Export Reports",
   "/profile": "Profile",
   "/notifications": "Notifications",
+  "/students": "Student Matrix",
 };
 
 export default function Navbar() {
