@@ -1,7 +1,10 @@
-import { Bell, CheckCircle2, MessageCircle, AlertTriangle } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { Bell, CheckCircle2, MessageCircle, X } from "lucide-react";
 
 export default function NotificationsPage() {
-  const notifications = [
+  const [notifications, setNotifications] = useState([
     {
       id: 1,
       title: "New Session Request",
@@ -26,23 +29,53 @@ export default function NotificationsPage() {
       type: "system",
       unread: false,
     },
-  ];
+  ]);
+
+  const handleMarkAllRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+  };
+
+  const toggleReadStatus = (id: number) => {
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, unread: !n.unread } : n))
+    );
+  };
+
+  const handleDismiss = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Avoid triggering read state toggle
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const unreadCount = notifications.filter((n) => n.unread).length;
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-3xl mx-auto pb-20">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-        <button className="text-sm font-medium text-blue-600 hover:text-blue-700">
-          Mark all as read
-        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+          {unreadCount > 0 && (
+            <p className="text-xs text-blue-600 font-semibold mt-1">
+              You have {unreadCount} unread notification{unreadCount > 1 ? "s" : ""}
+            </p>
+          )}
+        </div>
+        {unreadCount > 0 && (
+          <button
+            onClick={handleMarkAllRead}
+            className="text-sm font-semibold text-blue-600 hover:text-blue-700 transition-colors cursor-pointer"
+          >
+            Mark all as read
+          </button>
+        )}
       </div>
 
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm divide-y divide-gray-100 overflow-hidden">
         {notifications.map((notification) => (
           <div
             key={notification.id}
-            className={`p-4 flex gap-4 hover:bg-gray-50 transition-colors cursor-pointer ${
-              notification.unread ? "bg-blue-50/50" : ""
+            onClick={() => toggleReadStatus(notification.id)}
+            className={`p-4 flex gap-4 hover:bg-gray-50/70 transition-colors cursor-pointer relative group ${
+              notification.unread ? "bg-blue-50/30" : ""
             }`}
           >
             <div className="mt-1">
@@ -62,24 +95,34 @@ export default function NotificationsPage() {
                 </div>
               )}
             </div>
-            <div className="flex-1">
-              <div className="flex items-center justify-between">
-                <h3 className={`text-sm font-semibold ${notification.unread ? "text-gray-900" : "text-gray-700"}`}>
+            <div className="flex-1 min-w-0 pr-8">
+              <div className="flex items-center justify-between gap-4">
+                <h3 className={`text-sm ${notification.unread ? "font-bold text-gray-900" : "font-medium text-gray-700"}`}>
                   {notification.title}
                 </h3>
-                <span className="text-xs text-gray-500">{notification.time}</span>
+                <span className="text-[11px] text-gray-400 font-medium shrink-0">{notification.time}</span>
               </div>
-              <p className="text-sm text-gray-600 mt-1">{notification.message}</p>
+              <p className="text-sm text-gray-600 mt-1 leading-relaxed">{notification.message}</p>
             </div>
-            {notification.unread && (
-              <div className="w-2 h-2 rounded-full bg-blue-600 mt-2 self-center" />
-            )}
+            
+            <div className="flex items-center gap-3 shrink-0">
+              {notification.unread && (
+                <div className="w-2 h-2 rounded-full bg-blue-600" />
+              )}
+              <button
+                onClick={(e) => handleDismiss(notification.id, e)}
+                className="opacity-0 group-hover:opacity-100 p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all cursor-pointer"
+                title="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         ))}
         {notifications.length === 0 && (
-          <div className="p-8 text-center text-gray-500">
-            <Bell className="w-8 h-8 mx-auto mb-3 text-gray-400" />
-            <p>You have no notifications.</p>
+          <div className="p-16 text-center text-gray-500">
+            <Bell className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+            <p className="text-sm font-semibold">You have no notifications.</p>
           </div>
         )}
       </div>
