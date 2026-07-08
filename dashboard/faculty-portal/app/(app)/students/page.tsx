@@ -45,7 +45,7 @@ const mockStudents: StudentProgress[] = [
     name: "Michael Chen", 
     rollNumber: "NST-2023-0012", 
     branch: "CS", 
-    year: "3rd Year", 
+    year: "2023-2027", 
     xp: 18900, 
     alignment: 94, 
     solved: 320, 
@@ -67,7 +67,7 @@ const mockStudents: StudentProgress[] = [
     name: "Sarah Jenkins", 
     rollNumber: "NST-2023-0045", 
     branch: "CS-AI", 
-    year: "3rd Year", 
+    year: "2023-2027", 
     xp: 14250, 
     alignment: 88, 
     solved: 280, 
@@ -89,7 +89,7 @@ const mockStudents: StudentProgress[] = [
     name: "Emily Davis", 
     rollNumber: "NST-2023-0098", 
     branch: "CS", 
-    year: "3rd Year", 
+    year: "2023-2027", 
     xp: 13800, 
     alignment: 85, 
     solved: 240, 
@@ -111,7 +111,7 @@ const mockStudents: StudentProgress[] = [
     name: "David Kim", 
     rollNumber: "NST-2023-0021", 
     branch: "CS-DS", 
-    year: "3rd Year", 
+    year: "2023-2027", 
     xp: 12450, 
     alignment: 82, 
     solved: 210, 
@@ -133,7 +133,7 @@ const mockStudents: StudentProgress[] = [
     name: "Alex Johnson", 
     rollNumber: "NST-2023-0078", 
     branch: "CS-AI", 
-    year: "3rd Year", 
+    year: "2024-2028", 
     xp: 11920, 
     alignment: 79, 
     solved: 195, 
@@ -155,7 +155,7 @@ const mockStudents: StudentProgress[] = [
     name: "Rachel Jones", 
     rollNumber: "NST-2023-0089", 
     branch: "CS", 
-    year: "3rd Year", 
+    year: "2024-2028", 
     xp: 11100, 
     alignment: 75, 
     solved: 180, 
@@ -176,7 +176,7 @@ const mockStudents: StudentProgress[] = [
     name: "Maria Garcia", 
     rollNumber: "NST-2023-0102", 
     branch: "CS-DS", 
-    year: "3rd Year", 
+    year: "2024-2028", 
     xp: 10850, 
     alignment: 72, 
     solved: 170, 
@@ -197,7 +197,7 @@ const mockStudents: StudentProgress[] = [
     name: "Aarav Patel", 
     rollNumber: "NST-2023-0056", 
     branch: "CS-AI", 
-    year: "3rd Year", 
+    year: "2025-2029", 
     xp: 9800, 
     alignment: 68, 
     solved: 150, 
@@ -218,7 +218,7 @@ const mockStudents: StudentProgress[] = [
     name: "Maya Singh", 
     rollNumber: "NST-2023-0111", 
     branch: "CS", 
-    year: "3rd Year", 
+    year: "2025-2029", 
     xp: 8900, 
     alignment: 62, 
     solved: 130, 
@@ -239,7 +239,7 @@ const mockStudents: StudentProgress[] = [
     name: "Rohan Sharma", 
     rollNumber: "NST-2023-0004", 
     branch: "CS", 
-    year: "3rd Year", 
+    year: "2025-2029", 
     xp: 7200, 
     alignment: 55, 
     solved: 105, 
@@ -275,6 +275,7 @@ export default function StudentMatrixPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentPage(1);
   }, [searchQuery, branchFilter, yearFilter, mentorshipScope]);
 
@@ -300,8 +301,8 @@ export default function StudentMatrixPage() {
       return matchQuery && matchBranch && matchYear;
     })
     .sort((a, b) => {
-      let valA = a[sortField];
-      let valB = b[sortField];
+      const valA = a[sortField];
+      const valB = b[sortField];
       if (sortDirection === "asc") {
         return valA > valB ? 1 : -1;
       } else {
@@ -499,16 +500,17 @@ export default function StudentMatrixPage() {
                     onChange={(e) => setYearFilter(e.target.value)}
                     className="border border-gray-300 rounded-lg px-2.5 py-1.5 bg-white text-xs font-semibold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="All">All Years</option>
-                    <option value="3rd Year">3rd Year</option>
-                    <option value="4th Year">4th Year</option>
+                    <option value="All">All Cohorts</option>
+                    <option value="2023-2027">2023-2027</option>
+                    <option value="2024-2028">2024-2028</option>
+                    <option value="2025-2029">2025-2029</option>
                   </select>
                 </div>
               </div>
             </div>
 
             {/* Table Area */}
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-b-xl">
               <table className="w-full text-left border-collapse min-w-[800px]">
                 <thead>
                   <tr className="border-b border-gray-200 text-xs font-bold uppercase tracking-wider text-gray-500 bg-white">
@@ -527,7 +529,7 @@ export default function StudentMatrixPage() {
                     <th className="py-4 px-6 text-right">Diagnostic Matrix</th>
                   </tr>
                 </thead>
-                <tbody className="text-sm divide-y divide-gray-150 bg-white">
+                <tbody className="text-sm divide-y divide-gray-200 bg-white">
                   {paginatedStudents.length > 0 ? (
                     paginatedStudents.map((student) => (
                       <tr key={student.rollNumber} className="hover:bg-gray-50/70 transition-colors">
@@ -573,7 +575,7 @@ export default function StudentMatrixPage() {
                               <div className="flex gap-2 items-center text-[11px] text-gray-500 font-medium mt-0.5">
                                 <span>{student.rollNumber}</span>
                                 <span>•</span>
-                                <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-650 font-semibold">{student.branch}</span>
+                                <span className="bg-gray-100 px-1.5 py-0.5 rounded text-gray-600 font-semibold">{student.branch}</span>
                               </div>
                             </div>
                           </div>
@@ -624,7 +626,7 @@ export default function StudentMatrixPage() {
 
             {/* Pagination controls footer */}
             {totalPages > 1 && (
-              <div className="p-4 bg-gray-50/50 border-t border-gray-200 flex flex-col sm:flex-row gap-4 items-center justify-between text-xs text-gray-500 font-semibold shrink-0">
+              <div className="p-4 bg-gray-50/50 border-t border-gray-200 rounded-b-xl flex flex-col sm:flex-row gap-4 items-center justify-between text-xs text-gray-500 font-semibold shrink-0">
                 <div className="flex items-center gap-2">
                   <span>Show</span>
                   <select
@@ -687,7 +689,7 @@ export default function StudentMatrixPage() {
           <div className="bg-white rounded-xl border border-gray-200 shadow-xl max-w-lg w-full overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
             
             {/* Modal Header */}
-            <div className="p-5 border-b border-gray-150 bg-gray-50 flex justify-between items-center shrink-0">
+            <div className="p-5 border-b border-gray-200 bg-gray-50 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-sm">
                   {selectedStudent.initials}
@@ -710,7 +712,7 @@ export default function StudentMatrixPage() {
               
               {/* Overall alignment and coding statistics */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Total Solved</p>
                   <p className="text-lg font-black text-gray-900 mt-1">{selectedStudent.solved} / 400</p>
                   <div className="flex gap-1.5 items-center mt-2 flex-wrap">
@@ -729,12 +731,12 @@ export default function StudentMatrixPage() {
                   </div>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-100 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-450 font-bold uppercase tracking-wider">Standing Score</p>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                  <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Standing Score</p>
                   <p className="text-lg font-black text-emerald-700 mt-1">{selectedStudent.alignment}% Aligned</p>
                   <div className="text-[10px] font-semibold text-gray-500 mt-2 flex items-center gap-1">
                     <Trophy className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    Ranked #{selectedStudent.rank} in {selectedStudent.year}
+                    Ranked #{selectedStudent.rank} in Cohort {selectedStudent.year}
                   </div>
                 </div>
               </div>
@@ -794,7 +796,7 @@ export default function StudentMatrixPage() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-gray-150 bg-gray-50 flex justify-end shrink-0">
+            <div className="p-4 border-t border-gray-200 bg-gray-50 flex justify-end shrink-0 rounded-b-xl">
               <button 
                 onClick={() => setSelectedStudent(null)}
                 className="bg-black text-white py-2 px-6 rounded-lg text-xs font-semibold hover:bg-gray-900 transition-colors cursor-pointer"

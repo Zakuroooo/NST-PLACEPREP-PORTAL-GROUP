@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Download, Play, CheckCircle2, History, Loader2, X } from "lucide-react";
+import { FileText, Download, Play, CheckCircle2, History, Loader2 } from "lucide-react";
 import { mockReportHistory as initialReportHistory } from "@/lib/mock-data";
 import { useState, useEffect } from "react";
 
@@ -11,7 +11,7 @@ export default function ReportsPage() {
     companyRankings: true,
     subjectBreakdown: false
   });
-  
+
   const [reportHistory, setReportHistory] = useState(initialReportHistory);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showToast, setShowToast] = useState(false);
@@ -27,7 +27,6 @@ export default function ReportsPage() {
     setIsGenerating(true);
 
     setTimeout(() => {
-      // Convert camelCase section keys to capitalized names
       const selectedNames = Object.entries(sections)
         .filter(([_, val]) => val)
         .map(([key]) => {
@@ -37,7 +36,7 @@ export default function ReportsPage() {
           return "Subject Breakdown";
         });
 
-      const newReportName = selectedNames.length > 0 
+      const newReportName = selectedNames.length > 0
         ? `Report: ${selectedNames.join(" & ")}`
         : "Standard Curriculum Report";
 
@@ -89,11 +88,38 @@ Newton School of Technology Academic Planning Unit
     document.body.removeChild(link);
   };
 
+  const SECTION_CONFIG = [
+    {
+      key: "gapMatrix" as const,
+      label: "Curriculum Gap Matrix",
+      desc: "Include the full breakdown of subjects vs industry demand.",
+      color: "peer-checked:bg-blue-600 peer-checked:border-blue-600",
+    },
+    {
+      key: "industryTrends" as const,
+      label: "Industry Trends",
+      desc: "Include topic frequency charts and recent trend alerts.",
+      color: "peer-checked:bg-blue-600 peer-checked:border-blue-600",
+    },
+    {
+      key: "companyRankings" as const,
+      label: "Company Rankings",
+      desc: "Include top hiring companies sorted by curriculum alignment.",
+      color: "peer-checked:bg-blue-600 peer-checked:border-blue-600",
+    },
+    {
+      key: "subjectBreakdown" as const,
+      label: "Full Subject Breakdown",
+      desc: "Include detailed syllabus analysis for all subjects.",
+      color: "peer-checked:bg-blue-600 peer-checked:border-blue-600",
+    },
+  ];
+
   return (
     <div className="max-w-7xl mx-auto pb-20 relative">
       {/* Toast Alert */}
       {showToast && (
-        <div className="fixed top-4 right-4 bg-emerald-600 text-white font-bold text-xs px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-in slide-in-from-top-5 duration-200">
+        <div className="fixed top-4 right-4 bg-green-600 text-white font-bold text-xs px-4 py-3 rounded-xl shadow-lg shadow-green-500/20 z-50 flex items-center gap-2 animate-in slide-in-from-top-5 duration-200">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
           <span>Report generated successfully! Added to history list.</span>
         </div>
@@ -101,14 +127,19 @@ Newton School of Technology Academic Planning Unit
 
       {/* Page Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">Export Reports</h1>
-        <p className="text-sm text-gray-500">Generate and download curriculum intelligence reports for academic review.</p>
+        <div className="flex items-center gap-3 mb-1">
+          <div className="p-2 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/25">
+            <FileText className="w-5 h-5" />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900">Export Reports</h1>
+        </div>
+        <p className="text-sm text-gray-500 ml-12">Generate and download curriculum intelligence reports for academic review.</p>
       </div>
 
       {isLoading ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 h-96 bg-gray-100 animate-pulse rounded-xl"></div>
-          <div className="lg:col-span-1 h-96 bg-gray-100 animate-pulse rounded-xl"></div>
+          <div className="lg:col-span-2 h-96 bg-gray-100 animate-pulse rounded-xl" />
+          <div className="lg:col-span-1 h-96 bg-gray-100 animate-pulse rounded-xl" />
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -116,12 +147,12 @@ Newton School of Technology Academic Planning Unit
           <div className="lg:col-span-2 flex flex-col">
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden h-full relative">
               {isGenerating && (
-                <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3">
+                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-30 flex flex-col items-center justify-center gap-3">
                   <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                   <p className="text-sm font-bold text-gray-900">Compiling report analytics...</p>
                 </div>
               )}
-              
+
               <div className="p-6 border-b border-gray-200 bg-gray-50">
                 <h2 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
                   <FileText className="w-5 h-5 text-blue-600" />
@@ -129,78 +160,41 @@ Newton School of Technology Academic Planning Unit
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">Select the sections you want to include in the PDF export.</p>
               </div>
-              
+
               <div className="p-6">
-                <div className="space-y-4 mb-8">
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <div className="relative flex items-center justify-center mt-0.5">
-                      <input 
-                        type="checkbox" 
-                        className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer peer appearance-none border checked:bg-blue-600 checked:border-blue-600 transition-colors"
-                        checked={sections.gapMatrix}
-                        onChange={() => setSections({...sections, gapMatrix: !sections.gapMatrix})}
-                      />
-                      <CheckCircle2 className="w-3.5 h-3.5 text-white absolute pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Curriculum Gap Matrix</p>
-                      <p className="text-sm text-gray-500 leading-snug">Include the full breakdown of subjects vs industry demand.</p>
-                    </div>
-                  </label>
-                  
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <div className="relative flex items-center justify-center mt-0.5">
-                      <input 
-                        type="checkbox" 
-                        className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer peer appearance-none border checked:bg-blue-600 checked:border-blue-600 transition-colors"
-                        checked={sections.industryTrends}
-                        onChange={() => setSections({...sections, industryTrends: !sections.industryTrends})}
-                      />
-                      <CheckCircle2 className="w-3.5 h-3.5 text-white absolute pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Industry Trends</p>
-                      <p className="text-sm text-gray-500 leading-snug">Include topic frequency charts and recent trend alerts.</p>
-                    </div>
-                  </label>
-                  
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <div className="relative flex items-center justify-center mt-0.5">
-                      <input 
-                        type="checkbox" 
-                        className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer peer appearance-none border checked:bg-blue-600 checked:border-blue-600 transition-colors"
-                        checked={sections.companyRankings}
-                        onChange={() => setSections({...sections, companyRankings: !sections.companyRankings})}
-                      />
-                      <CheckCircle2 className="w-3.5 h-3.5 text-white absolute pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Company Rankings</p>
-                      <p className="text-sm text-gray-500 leading-snug">Include top hiring companies sorted by curriculum alignment.</p>
-                    </div>
-                  </label>
-                  
-                  <label className="flex items-start gap-3 cursor-pointer group">
-                    <div className="relative flex items-center justify-center mt-0.5">
-                      <input 
-                        type="checkbox" 
-                        className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer peer appearance-none border checked:bg-blue-600 checked:border-blue-600 transition-colors"
-                        checked={sections.subjectBreakdown}
-                        onChange={() => setSections({...sections, subjectBreakdown: !sections.subjectBreakdown})}
-                      />
-                      <CheckCircle2 className="w-3.5 h-3.5 text-white absolute pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">Full Subject Breakdown</p>
-                      <p className="text-sm text-gray-500 leading-snug">Include detailed syllabus analysis for all subjects.</p>
-                    </div>
-                  </label>
+                <div className="space-y-3 mb-8">
+                  {SECTION_CONFIG.map(({ key, label, desc }) => (
+                    <label
+                      key={key}
+                      className={`flex items-start gap-4 cursor-pointer group rounded-xl border p-4 transition-all ${
+                        sections[key]
+                          ? "border-blue-200 bg-blue-50/50"
+                          : "border-gray-100 hover:border-blue-100 hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="relative flex items-center justify-center mt-0.5 shrink-0">
+                        <input
+                          type="checkbox"
+                          className="w-5 h-5 rounded border-gray-300 cursor-pointer peer appearance-none border checked:bg-blue-600 checked:border-blue-600 transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                          checked={sections[key]}
+                          onChange={() => setSections({ ...sections, [key]: !sections[key] })}
+                        />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-white absolute pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity" />
+                      </div>
+                      <div>
+                        <p className={`font-semibold transition-colors ${sections[key] ? "text-blue-700" : "text-gray-900 group-hover:text-blue-700"}`}>
+                          {label}
+                        </p>
+                        <p className="text-sm text-gray-500 leading-snug mt-0.5">{desc}</p>
+                      </div>
+                    </label>
+                  ))}
                 </div>
-                
-                <button 
+
+                <button
                   onClick={handleGenerate}
                   disabled={isGenerating}
-                  className="bg-black text-white font-semibold py-3 px-6 rounded-lg hover:bg-gray-900 transition-colors flex items-center gap-2 shadow-sm w-full justify-center md:w-auto disabled:opacity-50 cursor-pointer"
+                  className="bg-blue-600 text-white font-bold py-3 px-6 rounded-xl hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-md shadow-blue-500/20 w-full justify-center md:w-auto disabled:opacity-50 cursor-pointer"
                 >
                   <Play className="w-4 h-4" /> Generate Report
                 </button>
@@ -213,23 +207,26 @@ Newton School of Technology Academic Planning Unit
             <div className="bg-white border border-gray-200 rounded-xl shadow-sm h-full flex flex-col">
               <div className="p-5 border-b border-gray-200 bg-gray-50">
                 <h2 className="font-bold text-gray-900 flex items-center gap-2 text-lg">
-                  <History className="w-5 h-5 text-gray-600" />
+                  <History className="w-5 h-5 text-blue-600" />
                   Previously Generated
                 </h2>
               </div>
-              
+
               <div className="p-5 flex-grow overflow-y-auto max-h-[400px]">
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {reportHistory.map(report => (
-                    <div key={report.id} className="border border-gray-100 bg-white hover:border-blue-200 hover:shadow-sm transition-all rounded-lg p-4 group animate-in slide-in-from-top-3 duration-200">
+                    <div
+                      key={report.id}
+                      className="border border-gray-100 bg-white hover:border-blue-200 hover:bg-blue-50/30 hover:shadow-sm transition-all rounded-xl p-4 group animate-in slide-in-from-top-3 duration-200"
+                    >
                       <div className="flex justify-between items-start mb-2">
-                        <FileText className="w-5 h-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
-                        <span className="text-xs font-semibold text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{report.date}</span>
+                        <FileText className="w-4 h-4 text-gray-400 group-hover:text-blue-600 transition-colors mt-0.5" />
+                        <span className="text-[10px] font-semibold text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{report.date}</span>
                       </div>
                       <p className="font-bold text-gray-900 mb-3 text-sm leading-snug">{report.name}</p>
-                      <button 
+                      <button
                         onClick={() => handleDownload(report.name)}
-                        className="w-full text-blue-600 bg-blue-50 hover:bg-blue-100 font-semibold text-xs py-2 rounded transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        className="w-full text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                       >
                         <Download className="w-3.5 h-3.5" /> Download PDF
                       </button>

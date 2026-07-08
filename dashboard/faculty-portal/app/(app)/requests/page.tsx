@@ -8,18 +8,54 @@ import {
   XCircle,
   AlertCircle,
   Video,
+  Search,
+  Filter,
+  Users,
+  CalendarRange,
+  ChevronRight,
+  Sparkles,
 } from "lucide-react";
 import { mockFacultySessionRequests } from "@/lib/mock-data";
 import { FacultySessionRequest, SessionStatus } from "@/lib/mock-data";
 
 const TIME_SLOTS = ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM"];
 
-const STATUS_CFG: Record<SessionStatus, { label: string; cls: string; icon: React.ElementType }> = {
-  pending: { label: "Pending", cls: "bg-blue-50 text-blue-700 border-blue-200", icon: Clock },
-  confirmed: { label: "Confirmed", cls: "bg-blue-600 text-white border-blue-600", icon: CheckCircle2 },
-  proposed: { label: "New Time Proposed", cls: "bg-slate-100 text-slate-700 border-slate-200", icon: AlertCircle },
-  completed: { label: "Completed", cls: "bg-gray-100 text-gray-500 border-gray-200", icon: CheckCircle2 },
-  cancelled: { label: "Cancelled", cls: "bg-gray-100 text-gray-400 border-gray-200", icon: XCircle },
+const STATUS_CFG: Record<SessionStatus, { label: string; cls: string; border: string; icon: React.ElementType; color: string }> = {
+  pending: { 
+    label: "Awaiting Action", 
+    cls: "bg-amber-50 text-amber-700 border-amber-200", 
+    border: "border-l-amber-500",
+    icon: Clock,
+    color: "text-amber-500"
+  },
+  confirmed: { 
+    label: "Confirmed Session", 
+    cls: "bg-emerald-50 text-emerald-700 border-emerald-200", 
+    border: "border-l-emerald-500",
+    icon: CheckCircle2,
+    color: "text-emerald-500"
+  },
+  proposed: { 
+    label: "Alternative Proposed", 
+    cls: "bg-indigo-50 text-indigo-700 border-indigo-200", 
+    border: "border-l-indigo-500",
+    icon: AlertCircle,
+    color: "text-indigo-500"
+  },
+  completed: { 
+    label: "Session Completed", 
+    cls: "bg-slate-50 text-slate-650 border-slate-200", 
+    border: "border-l-slate-400",
+    icon: CheckCircle2,
+    color: "text-slate-455"
+  },
+  cancelled: { 
+    label: "Cancelled", 
+    cls: "bg-rose-50 text-rose-700 border-rose-200", 
+    border: "border-l-rose-500",
+    icon: XCircle,
+    color: "text-rose-500"
+  },
 };
 
 function fmtDate(d: string) {
@@ -38,21 +74,13 @@ export default function RequestsPage() {
   const [proposingFor, setProposingFor] = useState<string | null>(null);
   const [proposedDate, setProposedDate] = useState("");
   const [proposedTime, setProposedTime] = useState(TIME_SLOTS[0]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 500);
+    const t = setTimeout(() => setIsLoading(false), 450);
     return () => clearTimeout(t);
   }, []);
-
-  const filteredRequests = requests.filter(
-    (r) => activeTab === "All" || r.status === activeTab
-  );
-
-  const pendingCount = requests.filter((r) => r.status === "pending").length;
-  const confirmedThisWeek = requests.filter(
-    (r) => r.status === "confirmed" && new Date(r.date) >= new Date()
-  ).length;
 
   const handleConfirm = (id: string) => {
     setRequests((prev) =>
@@ -93,272 +121,370 @@ export default function RequestsPage() {
     setProposedTime(TIME_SLOTS[0]);
   };
 
+  // Dynamic filter logic
+  const scopedRequests = requests.filter(
+    (r) => activeTab === "All" || r.status === activeTab
+  );
+
+  const filteredRequests = searchQuery.trim()
+    ? scopedRequests.filter(
+        (r) =>
+          r.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          r.topic.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          r.branch.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : scopedRequests;
+
+  // Counts
+  const totalCount = requests.length;
+  const pendingCount = requests.filter((r) => r.status === "pending").length;
+  const confirmedCount = requests.filter((r) => r.status === "confirmed").length;
+  const completedCount = requests.filter((r) => r.status === "completed").length;
+
+  const STAT_CARDS = [
+    {
+      label: "Total Requests",
+      value: totalCount,
+      icon: CalendarRange,
+      iconBg: "bg-blue-500",
+      textColor: "text-blue-600",
+      gradient: "from-blue-500/10 to-indigo-500/5",
+      border: "hover:border-blue-400"
+    },
+    {
+      label: "Pending Action",
+      value: pendingCount,
+      icon: Clock,
+      iconBg: "bg-amber-500",
+      textColor: "text-amber-600",
+      gradient: "from-amber-500/10 to-orange-500/5",
+      border: "hover:border-amber-400"
+    },
+    {
+      label: "Confirmed Session",
+      value: confirmedCount,
+      icon: CheckCircle2,
+      iconBg: "bg-emerald-500",
+      textColor: "text-emerald-600",
+      gradient: "from-emerald-500/10 to-teal-500/5",
+      border: "hover:border-emerald-400"
+    },
+    {
+      label: "Completed",
+      value: completedCount,
+      icon: Sparkles,
+      iconBg: "bg-violet-500",
+      textColor: "text-violet-600",
+      gradient: "from-violet-500/10 to-fuchsia-500/5",
+      border: "hover:border-violet-400"
+    }
+  ];
+
   return (
-    <div className="max-w-6xl pb-20">
-      <div className="mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Session Requests</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Manage 1:1 session requests from students
-        </p>
-      </div>
-
-      {isLoading ? (
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[1,2,3].map(i => <div key={i} className="h-16 bg-gray-100 animate-pulse rounded-lg"></div>)}
+    <div className="max-w-7xl mx-auto pb-20">
+      {/* ── Page Header ── */}
+      <div className="mb-7 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <div className="p-2 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-500/25">
+              <CalendarRange className="w-5 h-5" />
+            </div>
+            <h1 className="text-2xl font-black text-gray-900">Session Requests</h1>
           </div>
-          {[1,2,3,4].map(i => <div key={i} className="h-28 bg-gray-100 animate-pulse rounded-xl"></div>)}
+          <p className="text-sm text-gray-500 ml-12">
+            Manage and schedule 1:1 mentorship sessions requested by students
+          </p>
         </div>
-      ) : (
-        <>
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white border border-gray-200 rounded px-3 py-2.5 shadow-sm">
-          <p className="text-xs text-gray-500 mb-1">Total Requests</p>
-          <p className="text-xl font-bold text-gray-900">{requests.length}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded px-3 py-2.5 shadow-sm">
-          <p className="text-xs text-gray-500 mb-1">Pending Action</p>
-          <p className="text-xl font-bold text-blue-600">{pendingCount}</p>
-        </div>
-        <div className="bg-white border border-gray-200 rounded px-3 py-2.5 shadow-sm">
-          <p className="text-xs text-gray-500 mb-1">Confirmed This Week</p>
-          <p className="text-xl font-bold text-gray-900">{confirmedThisWeek}</p>
-        </div>
-      </div>
 
-      {/* Tabs and View Toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div className="flex items-center gap-0 border border-gray-200 rounded overflow-hidden w-fit bg-white shadow-sm">
-          {(["All", "pending", "confirmed", "proposed", "completed"] as const).map(
-            (tab) => {
-              const isActive = activeTab === tab;
-              const count =
-                tab === "All"
-                  ? requests.length
-                  : requests.filter((r) => r.status === tab).length;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-4 py-2 text-xs font-bold capitalize flex items-center gap-1.5 transition-colors ${
-                    isActive
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-                  }`}
-                >
-                  {tab}
-                  <span
-                    className={`px-1.5 py-0.5 rounded-full text-[10px] ${
-                      isActive
-                        ? "bg-blue-500 text-white"
-                        : "bg-gray-100 text-gray-500"
-                    }`}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            }
-          )}
-        </div>
-        
         {/* View Toggle */}
-        <div className="flex bg-gray-100 p-1 rounded-lg">
+        <div className="flex bg-gray-100 p-1 rounded-xl shadow-inner ml-12 md:ml-0">
           <button
             onClick={() => setViewMode("list")}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${viewMode === "list" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              viewMode === "list" 
+                ? "bg-white text-gray-900 shadow-sm" 
+                : "text-gray-500 hover:text-gray-900"
+            }`}
           >
             List View
           </button>
           <button
             onClick={() => setViewMode("calendar")}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${viewMode === "calendar" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+            className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${
+              viewMode === "calendar" 
+                ? "bg-white text-gray-900 shadow-sm" 
+                : "text-gray-500 hover:text-gray-900"
+            }`}
           >
             Calendar
           </button>
         </div>
       </div>
 
-      {/* Content View */}
-      {viewMode === "calendar" ? (
-        <div className="bg-white border border-gray-200 rounded-xl p-8 text-center shadow-sm">
-           <CalendarDays className="w-12 h-12 text-blue-100 mx-auto mb-4" />
-           <h3 className="text-lg font-bold text-gray-900">Calendar View Ready</h3>
-           <p className="text-sm text-gray-500 mt-2 max-w-sm mx-auto">
-             Full calendar synchronization will be available once the backend is connected. Currently displaying {filteredRequests.length} matching requests in list mode.
-           </p>
-           <button onClick={() => setViewMode("list")} className="mt-6 px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700">
-             Switch back to List
-           </button>
+      {isLoading ? (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-24 bg-gray-100 animate-pulse rounded-xl" />
+            ))}
+          </div>
+          <div className="h-14 bg-gray-100 animate-pulse rounded-xl" />
+          {[1, 2, 3].map(i => (
+            <div key={i} className="h-32 bg-gray-100 animate-pulse rounded-xl" />
+          ))}
         </div>
       ) : (
-        <div className="space-y-4">
-        {filteredRequests.length === 0 ? (
-          <div className="text-center py-16 bg-white border border-dashed border-gray-300 rounded-xl">
-            <CalendarDays className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-500">
-              No {activeTab !== "All" ? activeTab : ""} requests found.
-            </p>
-          </div>
-        ) : (
-          filteredRequests.map((req) => {
-            const { label, cls, icon: StatusIcon } = STATUS_CFG[req.status];
-            
-            // Determine left border color based on status
-            let borderAccent = "border-l-gray-300";
-            if (req.status === "confirmed") borderAccent = "border-l-blue-600";
-            else if (req.status === "pending") borderAccent = "border-l-blue-300";
-            else if (req.status === "proposed") borderAccent = "border-l-slate-400";
-
-            return (
-              <div
-                key={req.id}
-                className={`bg-white border border-gray-200 border-l-4 ${borderAccent} rounded shadow-sm p-4`}
+        <>
+          {/* ── Stats Grid ── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+            {STAT_CARDS.map(({ label, value, icon: Icon, iconBg, textColor, gradient, border }) => (
+              <div 
+                key={label}
+                className={`bg-white border border-gray-200/80 rounded-xl p-4 shadow-sm flex items-center justify-between transition-all duration-200 bg-gradient-to-br ${gradient} ${border} hover:shadow-md hover:scale-[1.01]`}
               >
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex gap-4 min-w-0 flex-1">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm shrink-0">
-                      {req.studentInitials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-bold text-sm text-gray-900">
-                          {req.studentName}
-                        </h3>
-                        <span className="text-xs text-gray-500">
-                          • {req.branch}, {req.year}
-                        </span>
-                      </div>
-                      <p className="font-bold text-sm text-gray-900 mb-1">
-                        {req.topic}
-                      </p>
-                      {req.notes && (
-                        <p className="text-xs text-gray-400 mb-3">
-                          {req.notes}
-                        </p>
-                      )}
-                      
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 font-medium">
-                        <span className="flex items-center gap-1.5">
-                          <CalendarDays className="w-3.5 h-3.5" />
-                          {fmtDate(req.date)}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <Clock className="w-3.5 h-3.5" />
-                          {req.time} · {req.duration} min
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded border text-[11px] font-semibold ${cls}`}
-                        >
-                          <StatusIcon className="w-3 h-3" /> {label}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions Column */}
-                  <div className="flex flex-col items-end gap-2 shrink-0">
-                    {req.status === "pending" && proposingFor !== req.id && (
-                      <>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleConfirm(req.id)}
-                            className="bg-blue-600 text-white text-xs font-semibold px-4 py-1.5 rounded hover:bg-blue-700 transition-colors"
-                          >
-                            Confirm
-                          </button>
-                          <button
-                            onClick={() => setProposingFor(req.id)}
-                            className="border border-gray-300 text-gray-600 text-xs font-semibold px-4 py-1.5 rounded hover:bg-gray-50 transition-colors"
-                          >
-                            Propose New Time
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => handleDecline(req.id)}
-                          className="text-xs text-gray-400 hover:text-gray-600 font-medium mt-1"
-                        >
-                          Decline Request
-                        </button>
-                      </>
-                    )}
-
-                    {/* Inline Propose Form */}
-                    {proposingFor === req.id && (
-                      <div className="bg-gray-50 border border-gray-200 rounded p-3 text-right">
-                        <p className="text-xs font-bold text-gray-700 mb-2">Propose Alternative Time</p>
-                        <div className="flex items-center gap-2 mb-3">
-                          <input
-                            type="date"
-                            value={proposedDate}
-                            onChange={(e) => setProposedDate(e.target.value)}
-                            className="text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500"
-                          />
-                          <select
-                            value={proposedTime}
-                            onChange={(e) => setProposedTime(e.target.value)}
-                            className="text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500"
-                          >
-                            {TIME_SLOTS.map((t) => (
-                              <option key={t} value={t}>
-                                {t}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => setProposingFor(null)}
-                            className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
-                          >
-                            Cancel
-                          </button>
-                          <button
-                            onClick={() => handleProposeSubmit(req.id)}
-                            disabled={!proposedDate}
-                            className="text-xs font-semibold bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            Send Proposal
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {req.status === "confirmed" && req.meetLink && (
-                      <a
-                        href={req.meetLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1.5 bg-blue-600 text-white text-xs font-semibold px-4 py-1.5 rounded hover:bg-blue-700 transition-colors"
-                      >
-                        <Video className="w-3.5 h-3.5" /> Join
-                      </a>
-                    )}
-                  </div>
+                <div>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">{label}</p>
+                  <p className="text-2xl font-black text-gray-900 leading-none">{value}</p>
                 </div>
-
-                {/* Proposed State Context */}
-                {req.status === "proposed" && req.proposedDate && (
-                  <div className="mt-4 pt-3 border-t border-gray-100 flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-slate-400 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-semibold text-gray-700 mb-0.5">
-                        Awaiting student response
-                      </p>
-                      <p className="text-xs text-blue-600 font-medium">
-                        You proposed: {fmtDate(req.proposedDate)} at {req.proposedTime}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                <div className={`p-2.5 rounded-xl ${iconBg} text-white shadow-sm shrink-0`}>
+                  <Icon className="w-4 h-4" />
+                </div>
               </div>
-            );
-          })
-        )}
-      </div>
-      )}
-      </>
+            ))}
+          </div>
+
+          {/* ── Interactive Filters ── */}
+          <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm mb-6 flex flex-wrap items-center gap-3 justify-between">
+            {/* Search inputs */}
+            <div className="relative flex-1 min-w-[220px]">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by student, topic or branch..."
+                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition-all"
+              />
+            </div>
+
+            {/* Tab pill layout */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(["All", "pending", "confirmed", "proposed", "completed"] as const).map(
+                (tab) => {
+                  const isActive = activeTab === tab;
+                  const count =
+                    tab === "All"
+                      ? requests.length
+                      : requests.filter((r) => r.status === tab).length;
+                  
+                  let tabStyle = "bg-gray-100 text-gray-600 hover:bg-gray-200";
+                  if (isActive) {
+                    if (tab === "All") tabStyle = "bg-blue-600 text-white shadow-sm shadow-blue-500/20";
+                    else if (tab === "pending") tabStyle = "bg-amber-500 text-white shadow-sm shadow-amber-500/20";
+                    else if (tab === "confirmed") tabStyle = "bg-emerald-600 text-white shadow-sm shadow-emerald-500/20";
+                    else if (tab === "proposed") tabStyle = "bg-indigo-600 text-white shadow-sm shadow-indigo-500/20";
+                    else tabStyle = "bg-slate-600 text-white shadow-sm shadow-slate-500/20";
+                  }
+                  
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => setActiveTab(tab)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-bold capitalize transition-all duration-200 cursor-pointer flex items-center gap-1.5 ${tabStyle}`}
+                    >
+                      {tab}
+                      <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
+                        isActive ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"
+                      }`}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                }
+              )}
+            </div>
+          </div>
+
+          {/* ── Content View ── */}
+          {viewMode === "calendar" ? (
+            <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center shadow-sm max-w-2xl mx-auto mt-4">
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner">
+                <CalendarDays className="w-8 h-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900">Calendar View Ready</h3>
+              <p className="text-xs text-gray-500 mt-2 max-w-sm mx-auto leading-relaxed">
+                Full calendar synchronization will be available once the backend is connected. Currently displaying {filteredRequests.length} matching requests in list mode.
+              </p>
+              <button 
+                onClick={() => setViewMode("list")} 
+                className="mt-6 px-5 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-colors cursor-pointer"
+              >
+                Switch back to List View
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredRequests.length === 0 ? (
+                <div className="text-center py-20 bg-white border border-dashed border-gray-300 rounded-2xl">
+                  <div className="w-14 h-14 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <CalendarDays className="w-7 h-7 text-gray-300" />
+                  </div>
+                  <p className="text-sm font-bold text-gray-400">No session requests found</p>
+                  <p className="text-xs text-gray-300 mt-1">Try adapting your search or filter values</p>
+                </div>
+              ) : (
+                filteredRequests.map((req) => {
+                  const { label, cls, border: borderAccent, icon: StatusIcon } = STATUS_CFG[req.status];
+                  
+                  // Clean avatar color palette based on name initials seed
+                  const codeSeed = req.studentName.charCodeAt(0) % 5;
+                  const avatarGradients = [
+                    "from-blue-600 to-indigo-600 text-white shadow-blue-200",
+                    "from-emerald-500 to-teal-600 text-white shadow-emerald-200",
+                    "from-violet-500 to-fuchsia-600 text-white shadow-violet-200",
+                    "from-rose-500 to-orange-500 text-white shadow-rose-200",
+                    "from-cyan-500 to-sky-600 text-white shadow-cyan-200"
+                  ];
+                  
+                  return (
+                    <div
+                      key={req.id}
+                      className={`bg-white border border-gray-200 border-l-4 ${borderAccent} rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-5`}
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div className="flex items-start gap-4 min-w-0 flex-1">
+                          <div className={`w-11 h-11 rounded-full bg-gradient-to-br ${avatarGradients[codeSeed]} flex items-center justify-center font-black text-sm shrink-0 shadow-md`}>
+                            {req.studentInitials}
+                          </div>
+                          
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <h3 className="font-bold text-sm text-gray-900">{req.studentName}</h3>
+                              <span className="text-[10px] text-gray-400">•</span>
+                              <span className="text-xs text-gray-500 font-semibold">{req.branch} · {req.year}</span>
+                            </div>
+                            
+                            <h4 className="font-bold text-sm text-gray-900 leading-snug mb-1">{req.topic}</h4>
+                            {req.notes && (
+                              <p className="text-xs text-gray-400 mb-3 bg-gray-50/60 p-2 rounded-lg border border-gray-100 max-w-2xl leading-relaxed">{req.notes}</p>
+                            )}
+                            
+                            <div className="flex flex-wrap items-center gap-2.5 text-xs text-gray-500 font-medium">
+                              <span className="flex items-center gap-1 px-2.5 py-1 bg-gray-50 rounded-full border border-gray-200/50">
+                                <CalendarDays className="w-3.5 h-3.5 text-gray-400" />
+                                {fmtDate(req.date)}
+                              </span>
+                              <span className="flex items-center gap-1 px-2.5 py-1 bg-gray-50 rounded-full border border-gray-200/50">
+                                <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                {req.time} · {req.duration} mins
+                              </span>
+                              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[10px] font-bold uppercase tracking-wider ${cls}`}>
+                                <StatusIcon className="w-3 h-3" /> {label}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Actions column */}
+                        <div className="flex items-center md:items-end justify-start md:justify-center md:flex-col gap-2 shrink-0 ml-15 md:ml-0">
+                          {req.status === "pending" && proposingFor !== req.id && (
+                            <>
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  onClick={() => handleConfirm(req.id)}
+                                  className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors cursor-pointer shadow-md shadow-blue-600/15"
+                                >
+                                  Confirm Session
+                                </button>
+                                <button
+                                  onClick={() => setProposingFor(req.id)}
+                                  className="border border-gray-300 text-gray-600 text-xs font-bold px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer bg-white"
+                                >
+                                  Propose Time
+                                </button>
+                              </div>
+                              <button
+                                onClick={() => handleDecline(req.id)}
+                                className="text-xs text-gray-400 hover:text-rose-600 font-semibold mt-1 transition-colors cursor-pointer"
+                              >
+                                Decline Request
+                              </button>
+                            </>
+                          )}
+
+                          {/* Inline propose form */}
+                          {proposingFor === req.id && (
+                            <div className="bg-gray-50 border border-gray-200 rounded-xl p-3.5 text-right w-full md:w-auto shadow-inner">
+                              <p className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-amber-500" /> Propose Alternative Time</p>
+                              <div className="flex flex-wrap items-center gap-2 mb-3">
+                                <input
+                                  type="date"
+                                  value={proposedDate}
+                                  onChange={(e) => setProposedDate(e.target.value)}
+                                  className="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                />
+                                <select
+                                  value={proposedTime}
+                                  onChange={(e) => setProposedTime(e.target.value)}
+                                  className="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                >
+                                  {TIME_SLOTS.map((t) => (
+                                    <option key={t} value={t}>
+                                      {t}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={() => setProposingFor(null)}
+                                  className="text-xs text-gray-500 hover:text-gray-700 px-2.5 py-1.5 font-semibold"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => handleProposeSubmit(req.id)}
+                                  disabled={!proposedDate}
+                                  className="text-xs font-bold bg-blue-600 text-white px-3.5 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-md"
+                                >
+                                  Send Proposal
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {req.status === "confirmed" && req.meetLink && (
+                            <a
+                              href={req.meetLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-md shadow-blue-500/20 cursor-pointer"
+                            >
+                              <Video className="w-3.5 h-3.5" /> Join Meet
+                            </a>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Alternate propose status label */}
+                      {req.status === "proposed" && req.proposedDate && (
+                        <div className="mt-4 pt-3.5 border-t border-gray-100 flex items-start gap-2 bg-indigo-50/40 p-3 rounded-lg border border-indigo-100/50">
+                          <AlertCircle className="w-4 h-4 text-indigo-500 mt-0.5" />
+                          <div>
+                            <p className="text-xs font-bold text-indigo-900 mb-0.5">Awaiting student response</p>
+                            <p className="text-[11px] text-indigo-700 font-semibold">
+                              You proposed: {fmtDate(req.proposedDate)} at {req.proposedTime}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

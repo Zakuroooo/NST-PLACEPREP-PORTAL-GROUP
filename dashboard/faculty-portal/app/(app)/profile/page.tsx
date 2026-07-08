@@ -217,7 +217,7 @@ export default function ProfilePage() {
                 <button 
                   type="button"
                   onClick={() => setEditModalOpen(false)}
-                  className="flex-1 bg-white border border-gray-250 text-gray-700 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors cursor-pointer"
+                  className="flex-1 bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
