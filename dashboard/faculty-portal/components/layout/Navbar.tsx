@@ -10,13 +10,12 @@ const pageTitles: Record<string, string> = {
   "/": "Dashboard",
   "/requests": "Session Requests",
   "/doubts": "Doubts & Questions",
-  // "/curriculum": "Curriculum Gap Matrix",
-  // "/trends": "Industry Trends",
   "/rankings": "Company Rankings",
   "/reports": "Export Reports",
   "/profile": "Profile",
   "/notifications": "Notifications",
   "/students": "Student Matrix",
+  "/leaderboard": "Leaderboard ",
 };
 
 export default function Navbar() {
@@ -26,31 +25,43 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6 lg:ml-[var(--sidebar-width)]">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-gray-200 bg-white px-4 lg:px-6">
         {/* Mobile hamburger */}
         <button
-          className="lg:hidden p-2 -ml-2 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors"
+          className="lg:hidden p-2 -ml-2 rounded-lg text-gray-600 hover:bg-blue-50 hover:text-blue-700 transition-colors"
           onClick={() => setMobileMenuOpen(true)}
         >
           <Menu className="h-5 w-5" />
         </button>
 
+        {/* Logo container */}
+        <div className="hidden lg:flex items-center gap-3 w-[var(--sidebar-width)] shrink-0">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-blue-700 to-blue-600 text-sm font-bold text-white shadow-md shadow-blue-500/30">
+            NST
+          </div>
+          <div>
+            <h1 className="text-sm font-bold leading-tight text-gray-900">PlacePrep</h1>
+            <p className="text-[10px] font-medium text-blue-600">Faculty Portal</p>
+          </div>
+        </div>
+
         {/* Page title */}
-        <h1 className="text-base font-semibold text-gray-900 lg:text-lg">{title}</h1>
+        <h1 className="text-base font-bold text-gray-900 lg:text-lg flex-1 lg:pl-4">
+          {title}
+        </h1>
 
         {/* Right actions */}
         <div className="flex items-center gap-1">
           <Link
             href="/notifications"
-            className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+            className="relative p-2 rounded-lg text-gray-500 hover:bg-blue-50 hover:text-blue-700 transition-colors"
           >
             <Bell className="h-5 w-5" />
-            {/* Hardcoded notification indicator for now */}
             <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
           </Link>
           <Link
             href="/profile"
-            className="hidden sm:flex p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+            className="hidden sm:flex p-2 rounded-lg text-gray-500 hover:bg-blue-50 hover:text-blue-700 transition-colors"
           >
             <User className="h-5 w-5" />
           </Link>

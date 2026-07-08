@@ -442,8 +442,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Right Stat Cards */}
-            <div className="flex flex-col gap-1.5 flex-grow max-h-[170px] overflow-y-auto pr-1">
+            {/* Right Stat Cards 2x3 Grid */}
+            <div className="grid grid-cols-2 gap-2 flex-grow max-h-[180px] overflow-y-auto pr-1">
               {resolvedSubjects.map((sub) => {
                 const isHovered = hoveredSubject === sub.id;
                 const isAnyHovered = hoveredSubject !== null;
@@ -668,7 +668,7 @@ export default function DashboardPage() {
                   {alert.tags && alert.tags.length > 0 && (
                     <div className="flex gap-2 flex-wrap">
                       {alert.tags.map(tag => (
-                        <span key={tag} className="text-[10px] bg-gray-50 px-2 py-0.5 rounded text-gray-650 font-semibold border border-gray-200 uppercase tracking-wide">
+                        <span key={tag} className="text-[10px] bg-gray-50 px-2 py-0.5 rounded text-gray-600 font-semibold border border-gray-200 uppercase tracking-wide">
                           {tag}
                         </span>
                       ))}
