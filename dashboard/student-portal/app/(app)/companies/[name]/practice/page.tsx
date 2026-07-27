@@ -2,14 +2,8 @@
 import { useState, useMemo, use } from "react";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, Search, X, SearchX, Flame } from "lucide-react";
-import {
-  filterQuestions,
-  allTopics,
-  getCompanyIntel,
-  getUserRoadmapCompanies,
-  type Difficulty,
-  type RoundType,
-} from "@/lib/mock-data";
+import { useCompany, usePractice, useRoadmap } from "@/lib/hooks";
+import { allTopics, type Difficulty, type RoundType } from "@/lib/constants";
 
 const diffBadge = (d: string) =>
   d === "Easy"   ? "bg-green-50 text-green-700 border border-green-200" :
@@ -34,8 +28,13 @@ export default function CompanyPracticePage({
 }) {
   const { name: slug } = use(params);
   const resolvedSearchParams = use(searchParams);
-  const intel = getCompanyIntel(slug);
-  const activeRoadmap = getUserRoadmapCompanies().find((r) => r.slug === slug);
+  
+  const { data: companyRes } = useCompany(slug);
+  const intel = companyRes?.data ?? companyRes;
+  
+  const { data: roadmapRes } = useRoadmap();
+  const roadmaps = roadmapRes?.data?.roadmaps ?? roadmapRes?.roadmaps ?? [];
+  const activeRoadmap = roadmaps.find((r: any) => r.companySlug === slug);
 
   const [search, setSearch] = useState("");
   const [topic, setTopic] = useState(
@@ -45,25 +44,36 @@ export default function CompanyPracticePage({
   const [roundType, setRoundType] = useState<RoundType | "">("");
   const [weekFilter, setWeekFilter] = useState<number | "">("");
 
+  // Fetch from practice API
+  const { data: practiceRes } = usePractice({
+    company: slug,
+    topic,
+    difficulty,
+  });
+  const rawQuestions = practiceRes?.data?.questions ?? practiceRes?.questions ?? [];
+
   const filtered = useMemo(() => {
-    let list = filterQuestions({
-      company: slug,
-      topic: topic || undefined,
-      difficulty: difficulty || undefined,
-      roundType: roundType || undefined,
-      search: search || undefined,
-    });
+    let list = [...rawQuestions];
+
+    // Local filters
+    if (roundType) {
+      list = list.filter((q) => q.roundType === roundType);
+    }
+    if (search.trim()) {
+      const qLower = search.toLowerCase();
+      list = list.filter((q) => q.title?.toLowerCase().includes(qLower));
+    }
 
     if (weekFilter !== "" && activeRoadmap) {
-      const selectedWeek = activeRoadmap.weeks.find((w) => w.weekNumber === Number(weekFilter));
+      const selectedWeek = activeRoadmap.weeks.find((w: any) => w.weekNumber === Number(weekFilter));
       if (selectedWeek) {
-        const weekQIds = new Set(selectedWeek.questions.map((q) => q.id));
-        list = list.filter((q) => weekQIds.has(q.id));
+        const weekQIds = new Set(selectedWeek.tasks?.map((t: any) => typeof t.questionId === 'object' ? t.questionId._id : t.questionId));
+        list = list.filter((q) => weekQIds.has(q._id));
       }
     }
 
     return list;
-  }, [slug, topic, difficulty, roundType, search, weekFilter, activeRoadmap]);
+  }, [rawQuestions, roundType, search, weekFilter, activeRoadmap]);
 
   const companyBg =
     slug === "google"    ? "bg-blue-600"   :
@@ -73,15 +83,13 @@ export default function CompanyPracticePage({
     slug === "razorpay"  ? "bg-blue-800"   :
     slug === "tcs"       ? "bg-indigo-600" : "bg-blue-600";
 
-  const initial = intel.name[0].toUpperCase();
-
   return (
     <div>
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-gray-500 mb-5">
         <Link href="/companies" className="hover:text-gray-700 transition-colors">Companies</Link>
         <span>/</span>
-        <Link href={`/companies/${slug}`} className="hover:text-gray-700 transition-colors capitalize">{intel.name}</Link>
+        <Link href={`/companies/${slug}`} className="hover:text-gray-700 transition-colors capitalize">{intel?.name || slug}</Link>
         <span>/</span>
         <span className="text-gray-900 font-medium">Practice</span>
       </div>
@@ -91,19 +99,19 @@ export default function CompanyPracticePage({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`https://www.google.com/s2/favicons?sz=64&domain=${slug}.com`}
-          alt={intel.name}
+          alt={intel?.name || slug}
           className="w-12 h-12 rounded-xl shrink-0 object-contain bg-white border border-gray-100 p-1.5"
           onError={(e) => { (e.target as HTMLImageElement).src = "https://www.google.com/s2/favicons?sz=64&domain=example.com"; }}
         />
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-0.5">
-            <h1 className="text-lg font-bold text-gray-900">Practice for {intel.name}</h1>
+            <h1 className="text-lg font-bold text-gray-900">Practice for {intel?.name || slug}</h1>
             <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${companyBg} text-white`}>
               Company-Locked
             </span>
           </div>
           <p className="text-sm text-gray-500">
-            All questions below are from {intel.name} interviews only — {filtered.length} shown
+            All questions below are from {intel?.name || slug} interviews only — {filtered.length} shown
           </p>
         </div>
         <Link
@@ -185,7 +193,7 @@ export default function CompanyPracticePage({
             className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-gray-700"
           >
             <option value="">All Weeks</option>
-            {activeRoadmap.weeks.map((w) => (
+            {activeRoadmap.weeks.map((w: any) => (
               <option key={w.weekNumber} value={w.weekNumber}>
                 Week {w.weekNumber}
               </option>
@@ -253,7 +261,7 @@ export default function CompanyPracticePage({
       </div>
 
       <p className="text-xs text-gray-400 text-center mt-4">
-        Showing {filtered.length} questions for {intel.name} · More coming as community contributes
+        Showing {filtered.length} questions for {intel?.name || slug} · More coming as community contributes
       </p>
     </div>
   );

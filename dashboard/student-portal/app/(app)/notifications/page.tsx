@@ -1,7 +1,16 @@
 "use client";
-import { useState, useEffect } from "react";
 import { Bell, CheckCheck, Trophy, BarChart, Zap, CheckCircle, BellRing, FileText, Target, Star } from "lucide-react";
-import { mockNotifications, type AppNotification } from "@/lib/mock-data";
+import { toast } from "sonner";
+import { useNotifications, markNotificationRead, markAllNotificationsRead } from "@/lib/hooks";
+
+type AppNotification = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  iconName?: string;
+  read: boolean;
+  createdAt: string;
+};
 
 const IconMap: Record<string, React.ElementType> = { Trophy, BarChart, Zap, CheckCircle, FileText, Target, Star };
 
@@ -30,10 +39,10 @@ function NotificationRow({
       }`}
       onClick={() => onMarkRead(notification.id)}
     >
-      {/* Emoji icon */}
+      {/* Icon */}
       <div className="w-10 h-10 bg-white border border-gray-200 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
         {(() => {
-          const Icon = IconMap[notification.iconName] || Bell;
+          const Icon = IconMap[notification.iconName ?? ""] || Bell;
           return <Icon className="w-5 h-5 text-gray-600" />;
         })()}
       </div>
@@ -58,25 +67,40 @@ function NotificationRow({
 }
 
 export default function NotificationsPage() {
-  // BACKEND TODO: GET /api/notifications
-  const [notifications, setNotifications] = useState<AppNotification[]>(mockNotifications);
+  // SWR — polls every 30s for new notifications, auto-revalidates on focus
+  const { data: rawData, isLoading, mutate } = useNotifications();
 
-  // Mark all as read when page loads
-  useEffect(() => {
-    sessionStorage.setItem("notifications_last_read", new Date().toISOString());
-  }, []);
+  // Normalize API shape or fall back to mock
+  const notifications: AppNotification[] = rawData
+    ? (Array.isArray(rawData) ? rawData : rawData.notifications ?? []).map((n: any) => ({
+        id: n._id ?? n.id,
+        title: n.title,
+        subtitle: n.subtitle,
+        iconName: n.iconName,
+        read: n.isRead ?? n.read ?? false,
+        createdAt: n.createdAt,
+      }))
+    : [];
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const handleMarkRead = (id: string) => {
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    );
+  const handleMarkRead = async (id: string) => {
+    try {
+      await markNotificationRead(id);
+      mutate(); // revalidate from server
+    } catch {
+      toast.error("Could not mark notification as read.");
+    }
   };
 
-  const handleMarkAllRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    // BACKEND TODO: POST /api/notifications/mark-all-read
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead();
+      mutate();
+      toast.success("All notifications marked as read.");
+    } catch {
+      toast.error("Could not mark all as read.");
+    }
   };
 
   const grouped = {

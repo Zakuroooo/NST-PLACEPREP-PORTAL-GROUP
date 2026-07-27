@@ -5,9 +5,9 @@ import {
   Clock, CheckCircle2, AlertCircle, Send, Tag,
   Inbox, BookOpen, Sparkles, Filter, Search,
 } from "lucide-react";
-import { mockFacultyDoubts } from "@/lib/mock-data";
-import { FacultyDoubt, DoubtStatus, DoubtTag, DoubtReply } from "@/lib/mock-data";
+import { FacultyDoubt, DoubtStatus, DoubtTag } from "@/lib/types";
 import { useFaculty } from "@/lib/context/FacultyContext";
+import { getDoubts, replyToDoubt, resolveDoubt } from "@/lib/api";
 
 // ── Status config ──────────────────────────────────────
 const STATUS_MAP: Record<DoubtStatus, { label: string; dot: string; badge: string; icon: React.ElementType }> = {
@@ -235,15 +235,39 @@ function DoubtCard({
 // ─────────────────────────────────────────────────────────────────────────────
 export default function DoubtsPage() {
   const { currentFaculty, updateFacultySolvedCount } = useFaculty();
-  const [doubts, setDoubts] = useState<FacultyDoubt[]>(mockFacultyDoubts);
+  const [doubts, setDoubts] = useState<FacultyDoubt[]>([]);
   const [statusFilter, setStatusFilter] = useState<"All" | DoubtStatus>("All");
   const [subjectFilter, setSubjectFilter] = useState<"My Subjects" | "All Doubts">("My Subjects");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 500);
-    return () => clearTimeout(t);
+    getDoubts()
+      .then(({ doubts: data }) => {
+        const mapped: FacultyDoubt[] = data.map((d: any) => ({
+          id: d._id,
+          studentName: d.studentName ?? (typeof d.studentId === "object" ? d.studentId?.fullName : "Student"),
+          studentInitials: (
+            d.studentName ?? (typeof d.studentId === "object" ? d.studentId?.fullName : "Student")
+          ).split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+          batch: typeof d.studentId === "object" ? d.studentId?.batch ?? "2024" : "2024",
+          subject: d.subject,
+          body: d.body,
+          tag: (d.tag ?? "General") as DoubtTag,
+          status: d.status as DoubtStatus,
+          createdAt: d.createdAt,
+          replies: (d.replies ?? []).map((r: any) => ({
+            id: r._id ?? String(Math.random()),
+            author: r.authorRole === "faculty" ? "faculty" : "student",
+            authorName: r.authorName,
+            body: r.body,
+            sentAt: r.sentAt,
+          })),
+        }));
+        setDoubts(mapped);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   }, []);
 
   const handleReply = (id: string, text: string) => {
@@ -251,6 +275,8 @@ export default function DoubtsPage() {
     if (doubt?.status === "pending" && currentFaculty) {
       updateFacultySolvedCount(currentFaculty.id);
     }
+    // Fire API call (optimistic — UI updates regardless)
+    replyToDoubt(id, text).catch(() => {});
     setDoubts((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;
@@ -273,6 +299,7 @@ export default function DoubtsPage() {
   };
 
   const handleResolve = (id: string) => {
+    resolveDoubt(id).catch(() => {});
     setDoubts((prev) => prev.map((d) => (d.id === id ? { ...d, status: "resolved" } : d)));
   };
 

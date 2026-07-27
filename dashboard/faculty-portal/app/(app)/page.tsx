@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { formatDistanceToNow } from "date-fns";
 import { 
   ChevronDown, ChevronUp, RefreshCw, 
   FileText, ArrowUp, 
@@ -11,9 +12,9 @@ import {
   Server, Cloud, Database, Radar,
   BookOpen, MessageSquare, Activity
 } from "lucide-react";
-import { computeOverall, mockCurriculumCoverage } from "@/lib/mock-data";
-import { mockTrendAlerts } from "@/lib/mock-data";
-import { mockFacultyMembers, CURRENT_FACULTY_ID } from "@/lib/facultyMembers";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url, { credentials: "include" }).then(r => r.json());
 
 export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
@@ -26,37 +27,57 @@ export default function DashboardPage() {
   const [semesterDropdownOpen, setSemesterDropdownOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSyncToast, setShowSyncToast] = useState(false);
+  const [lastSyncTimestamp, setLastSyncTimestamp] = useState<Date>(new Date());
+  const [syncTimeDisplay, setSyncTimeDisplay] = useState("just now");
 
   useEffect(() => {
     const t = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(t);
   }, []);
 
-  const handleSyncData = () => {
+  useEffect(() => {
+    setSyncTimeDisplay(formatDistanceToNow(lastSyncTimestamp, { addSuffix: true }));
+    const interval = setInterval(() => {
+      setSyncTimeDisplay(formatDistanceToNow(lastSyncTimestamp, { addSuffix: true }));
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [lastSyncTimestamp]);
+
+  // Real data from APIs
+  const { data: curriculumData } = useSWR('/api/faculty/curriculum', fetcher);
+  const { data: trendsData } = useSWR('/api/faculty/trends', fetcher);
+  const mockCurriculumCoverage = curriculumData?.data?.subjects ?? [];
+  const industryTrends = trendsData?.data?.industryTrends ?? [];
+
+  const { mutate } = useSWR('/api/faculty/dashboard', fetcher);
+  const handleSyncData = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
+    await mutate(); // Re-fetch the data from the backend
     setTimeout(() => {
       setIsSyncing(false);
+      setLastSyncTimestamp(new Date());
       setShowSyncToast(true);
       setTimeout(() => setShowSyncToast(false), 3000);
-    }, 1200);
+    }, 800);
   };
 
-  // Adjust statistics dynamically based on semester selection
-  let avgModifier = 0;
-  let overallActivityVal = 94;
-  let doubtsModifier = 0;
-  if (currentSemester === "Spring 2024") {
-    avgModifier = -4;
-    overallActivityVal = 88;
-    doubtsModifier = -25;
-  } else if (currentSemester === "Fall 2023") {
-    avgModifier = -9;
-    overallActivityVal = 81;
-    doubtsModifier = -60;
-  }
+  // Real dashboard data (faculty info + stats)
+  const { data: dashboardData } = useSWR('/api/faculty/dashboard', fetcher);
+  const facultyInfo = dashboardData?.data?.faculty ?? dashboardData?.faculty;
 
-  const currentFaculty = mockFacultyMembers.find(f => f.id === CURRENT_FACULTY_ID) || mockFacultyMembers[0];
+  const currentFaculty = {
+    name: facultyInfo?.fullName ?? "Faculty",
+    subjects: (facultyInfo?.subject ? [facultyInfo.subject] : ["DSA", "System Design", "Web Development", "DBMS & SQL", "Cloud Computing"]),
+    doubtsSolvedThisMonth: dashboardData?.data?.stats?.doubtsSolvedThisMonth ?? 0,
+    doubtsSolvedAllTime: dashboardData?.data?.stats?.totalDoubts ?? 0,
+  };
+
+  const resolutionRate = dashboardData?.data?.stats?.resolutionRate ?? 100;
+  const isLive = dashboardData?.data?.stats?.isLive ?? false;
+  const heatmapData = dashboardData?.data?.heatmap?.heatmapData ?? [];
+  const heatmapActiveDays = dashboardData?.data?.heatmap?.activeDays ?? 0;
+  const heatmapMaxStreak = dashboardData?.data?.heatmap?.maxStreak ?? 0;
 
   const getSeverityBadge = (severity: string) => {
     switch (severity) {
@@ -85,7 +106,7 @@ export default function DashboardPage() {
   };
 
   const getCoverageData = (subjectName: string) => {
-    return mockCurriculumCoverage.find(s => s.subjectName === subjectName);
+    return mockCurriculumCoverage.find((s: any) => s.subjectName === subjectName);
   };
 
   // We are asked to specifically render 3 rows in matrix preview:
@@ -93,69 +114,31 @@ export default function DashboardPage() {
   const cloudComp = getCoverageData("Cloud Computing");
   const dsa = getCoverageData("Data Structures & Algo");
 
-  const getSubjectCoverageByName = (name: string) => {
-    const searchName = name.toLowerCase();
-    const coverage = mockCurriculumCoverage.find(s => {
-      const sName = s.subjectName.toLowerCase();
-      return sName.includes(searchName) || searchName.includes(sName) ||
-        (searchName === "dsa" && sName.includes("data structures")) ||
-        (searchName === "web development" && sName.includes("web dev")) ||
-        (searchName === "web dev" && sName.includes("web dev"));
-    });
-    
-    if (!coverage) {
-      return {
-        subjectName: name,
-        courseCode: "CS101",
-        alignment: 50,
-        status: "Moderate",
-        color: "#2563eb",
-        bgColor: "bg-blue-50",
-        borderColor: "border-blue-200",
-        textColor: "text-blue-600",
-        id: name.toLowerCase().replace(/\s+/g, ""),
-      };
-    }
-    
-    let alignment = 0;
-    if (coverage.subjectName.includes("Data Structures")) alignment = 95;
-    else if (coverage.subjectName.includes("System Design")) alignment = 30;
-    else if (coverage.subjectName.includes("DBMS")) alignment = 75;
-    else if (coverage.subjectName.includes("Web Dev")) alignment = 60;
-    else if (coverage.subjectName.includes("OS & Networks")) alignment = 80;
-    else if (coverage.subjectName.includes("Cloud Computing")) alignment = 85;
-    else alignment = computeOverall(coverage.coverage);
-    
-    let status = "Aligned";
+  const getSubjectCoverageByName = (coverageObj: any) => {
     let color = "#10b981"; // emerald
     let bgColor = "bg-emerald-50";
     let borderColor = "border-emerald-200";
     let textColor = "text-emerald-600";
     
-    if (alignment < 40) {
-      status = "Critical";
+    if (coverageObj.status === "Critical") {
       color = "#f43f5e"; // rose
       bgColor = "bg-rose-50";
       borderColor = "border-rose-200";
       textColor = "text-rose-600";
-    } else if (alignment < 75) {
-      status = "Moderate";
+    } else if (coverageObj.status === "Moderate") {
       color = "#2563eb"; // blue-600
       bgColor = "bg-blue-50";
       borderColor = "border-blue-200";
       textColor = "text-blue-600";
     }
-    
+
     return {
-      subjectName: coverage.subjectName,
-      courseCode: coverage.courseCode,
-      alignment,
-      status,
+      ...coverageObj,
       color,
       bgColor,
       borderColor,
       textColor,
-      id: name.toLowerCase().replace(/\s+/g, ""),
+      id: coverageObj.subjectName.toLowerCase().replace(/\s+/g, ""),
     };
   };
 
@@ -211,8 +194,11 @@ export default function DashboardPage() {
   ];
 
   const resolvedSubjects = currentFaculty.subjects
+    .slice(0, 3)
+    .map((subName: string) => mockCurriculumCoverage.find((s: any) => s.subjectName === subName) || {
+      subjectName: subName, status: "Aligned", alignment: 50, courseCode: "CS"
+    })
     .map(getSubjectCoverageByName)
-    .sort((a, b) => a.courseCode.localeCompare(b.courseCode))
     .map((sub, idx) => {
       const palette = subjectColors[idx % subjectColors.length];
       return {
@@ -414,7 +400,7 @@ export default function DashboardPage() {
                     <span className="text-3xl font-black text-gray-900 leading-tight">{resolvedSubjects.length}</span>
                     <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Subjects</span>
                     <span className="text-[10px] text-emerald-600 font-semibold mt-1">
-                      {Math.round(resolvedSubjects.reduce((acc, s) => acc + s.alignment, 0) / resolvedSubjects.length) + avgModifier}% Avg
+                      {Math.round(resolvedSubjects.reduce((acc, s) => acc + s.alignment, 0) / (resolvedSubjects.length || 1))}% Avg
                     </span>
                   </>
                 ) : (
@@ -492,7 +478,7 @@ export default function DashboardPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Doubts Solved</p>
-              <p className="text-3xl font-bold text-gray-900 mb-2">{currentFaculty.doubtsSolvedAllTime + doubtsModifier}</p>
+              <p className="text-3xl font-bold text-gray-900 mb-2">{currentFaculty.doubtsSolvedAllTime}</p>
             </div>
           </div>
           <div className="text-xs text-gray-500 font-medium pt-2 border-t border-gray-100 mt-2">
@@ -512,17 +498,23 @@ export default function DashboardPage() {
               </span>
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Overall Activity</p>
-              <p className="text-3xl font-bold text-gray-900 mb-2">{overallActivityVal}%</p>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Resolution Rate</p>
+              <p className="text-3xl font-bold text-gray-900 mb-2">{resolutionRate}%</p>
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
             <span className="text-gray-400 font-medium flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> Synced {isSyncing ? "just now" : "2h ago"}
+              <Clock className="w-3.5 h-3.5" /> Synced {isSyncing ? "just now" : syncTimeDisplay}
             </span>
-            <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
-              <CheckCircle2 className="w-3 h-3" /> Live
-            </span>
+            {isLive ? (
+              <span className="text-emerald-600 font-semibold flex items-center gap-0.5">
+                <CheckCircle2 className="w-3 h-3" /> Live
+              </span>
+            ) : (
+              <span className="text-gray-400 font-semibold flex items-center gap-0.5">
+                <Clock className="w-3 h-3" /> Offline
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -536,14 +528,16 @@ export default function DashboardPage() {
               Faculty Activity Tracker
             </h3>
             <p className="text-xs text-gray-500">
-              {selectedYear === "current" ? "145 doubts resolved and 12 mock sessions in the past year" : "98 doubts resolved and 8 mock sessions in the previous year"}
+              {selectedYear === "current" 
+                ? `${dashboardData?.data?.stats?.totalDoubts ?? 0} doubts resolved and ${dashboardData?.data?.stats?.confirmedSessions ?? 0} mock sessions in the past year` 
+                : "98 doubts resolved and 8 mock sessions in the previous year"}
             </p>
           </div>
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 text-xs font-semibold text-gray-600 w-full sm:w-auto">
             <div className="flex gap-4">
-              <span>Total active days: <strong className="text-gray-900">{selectedYear === "current" ? "112" : "84"}</strong></span>
+              <span>Total active days: <strong className="text-gray-900">{heatmapActiveDays}</strong></span>
               <span>•</span>
-              <span>Max streak: <strong className="text-gray-900">{selectedYear === "current" ? "18 days" : "12 days"}</strong></span>
+              <span>Max streak: <strong className="text-gray-900">{heatmapMaxStreak} days</strong></span>
             </div>
             <select
               value={selectedYear}
@@ -575,27 +569,31 @@ export default function DashboardPage() {
                   { name: "Apr", weeksCount: 4, label: "Apr" },
                   { name: "May", weeksCount: 5, label: "May" },
                   { name: "Jun", weeksCount: 5, label: "Jun" }
-                ].map((month, mIdx) => (
+                ].map((month, mIdx) => {
+                  let startDayForMonth = 0;
+                  if (mIdx > 0) {
+                     // sum weeksCount for previous months * 7
+                     for(let i = 0; i < mIdx; i++) {
+                       startDayForMonth += [4, 4, 4, 5, 4, 4, 5, 4, 4, 4, 5, 5][i] * 7;
+                     }
+                  }
+
+                  return (
                   <div key={mIdx} className="flex flex-col items-center gap-2">
                     {/* Month Weeks Container */}
                     <div className="flex gap-[3px]">
                       {Array.from({ length: month.weeksCount }).map((_, wIdx) => (
                         <div key={wIdx} className="flex flex-col gap-[3px]">
                           {Array.from({ length: 7 }).map((_, dIndex) => {
-                            // Seed based on selectedYear
-                            const seed = selectedYear === "current" ? 13 : 17;
-                            const val = (mIdx * 19 + wIdx * 7 + dIndex * seed) % 15;
+                            const globalDayIndex = startDayForMonth + wIdx * 7 + dIndex;
                             let level = 0;
-                            if (selectedYear === "previous") {
-                              if (val === 1 || val === 4) level = 1;
-                              if (val === 2) level = 2;
-                              if (val === 8) level = 3;
-                              if (val === 14) level = 4;
+                            if (selectedYear === 'current') {
+                              level = heatmapData[globalDayIndex] || 0;
                             } else {
-                              if (val === 2 || val === 5 || val === 9) level = 1;
-                              if (val === 3 || val === 7) level = 2;
-                              if (val === 8) level = 3;
-                              if (val === 11) level = 4;
+                              // If previous year, we will just use the same real data offset by 365 days 
+                              // (Assuming heatmapData contains the whole history or we just mock zero if empty for now,
+                              // but since we don't have past year data from backend right now, we fallback to 0)
+                              level = heatmapData[globalDayIndex] || 0;
                             }
                             
                             return (
@@ -621,7 +619,7 @@ export default function DashboardPage() {
                       <span className="text-[10px] text-gray-400 font-bold tracking-wider">{month.label}</span>
                     </div>
                   </div>
-                ))}
+                )})}
               </div>
             </div>
           </div>
@@ -653,21 +651,21 @@ export default function DashboardPage() {
           
           <div className={`p-5 flex-grow overflow-y-auto transition-all duration-300 ${isExpanded ? "max-h-[1000px]" : "max-h-[450px]"}`}>
             <div className="space-y-6 ml-3 border-l-2 border-gray-100">
-              {mockTrendAlerts.map((alert, index) => (
+              {industryTrends.map((alert: any, index: number) => (
                 <div key={alert.id} className="relative pl-5">
-                  <div className={`absolute -left-[9px] top-0.5 w-4 h-4 rounded-full bg-white border-[3px] ${getAlertDot(alert.severity)}`}></div>
+                  <div className={`absolute -left-[9px] top-0.5 w-4 h-4 rounded-full bg-white border-[3px] ${getAlertDot(alert.severity?.toLowerCase() || 'info')}`}></div>
                   <span className="text-xs text-gray-500 font-semibold block mb-1">
-                    {alert.timeAgo} • {alert.source}
+                    {alert.detectedAt ? formatDistanceToNow(new Date(alert.detectedAt), { addSuffix: true }) : (alert.timeAgo || 'recently')} • {alert.source}
                   </span>
                   <p className="font-semibold text-gray-900 mb-1 leading-snug">
-                    {alert.headline}
+                    {alert.trend || alert.headline}
                   </p>
                   <p className="text-sm text-gray-500 mb-2 leading-relaxed">
-                    {alert.description}
+                    {alert.description || `Based on recent question frequency, ${alert.trend || 'this trend'} is highly relevant.`}
                   </p>
                   {alert.tags && alert.tags.length > 0 && (
                     <div className="flex gap-2 flex-wrap">
-                      {alert.tags.map(tag => (
+                      {alert.tags.map((tag: string) => (
                         <span key={tag} className="text-[10px] bg-gray-50 px-2 py-0.5 rounded text-gray-600 font-semibold border border-gray-200 uppercase tracking-wide">
                           {tag}
                         </span>

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Bell, User } from "lucide-react";
 import { SidebarContent } from "./Sidebar";
+import useSWR from "swr";
+import { toast } from "sonner";
 
 const pageTitles: Record<string, string> = {
   "/": "Dashboard",
@@ -18,10 +20,44 @@ const pageTitles: Record<string, string> = {
   "/leaderboard": "Leaderboard ",
 };
 
+const fetcher = (url: string) =>
+  fetch(url, { credentials: "include" }).then((r) => r.json());
+
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const title = pageTitles[pathname] || "Faculty Portal";
+
+  // BUG 5 FIX: Poll unread notification count every 30 seconds.
+  // On first successful load, show a login-time toast if there are unread items.
+  const { data: notifData } = useSWR(
+    "/api/faculty/notifications",
+    fetcher,
+    { refreshInterval: 30000, revalidateOnFocus: true }
+  );
+
+  const unreadCount: number = notifData?.data?.unreadCount ?? 0;
+  const hasShownLoginToast = useRef(false);
+
+  useEffect(() => {
+    // Show login-time toast once per session if there are unread notifications
+    if (notifData && !hasShownLoginToast.current) {
+      hasShownLoginToast.current = true;
+      if (unreadCount > 0) {
+        toast.info(
+          `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`,
+          {
+            duration: 4000,
+            description: "Visit the Notifications page to review them.",
+            action: {
+              label: "View",
+              onClick: () => { window.location.href = "/notifications"; },
+            },
+          }
+        );
+      }
+    }
+  }, [notifData, unreadCount]);
 
   return (
     <>
@@ -55,9 +91,15 @@ export default function Navbar() {
           <Link
             href="/notifications"
             className="relative p-2 rounded-lg text-gray-500 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+            aria-label={`Notifications${unreadCount > 0 ? `, ${unreadCount} unread` : ""}`}
           >
             <Bell className="h-5 w-5" />
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white" />
+            {/* Live badge — only shows when there are real unread notifications */}
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center bg-red-500 text-white text-[10px] font-bold rounded-full ring-2 ring-white px-1">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </Link>
           <Link
             href="/profile"

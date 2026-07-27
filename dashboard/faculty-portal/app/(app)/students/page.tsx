@@ -1,11 +1,11 @@
 "use client";
-
 import { useState, useEffect } from "react";
 import { 
   Search, ChevronDown, Trophy, Medal, GraduationCap, 
   BookOpen, MessageSquare, Activity, User, X, Clock, 
   CheckCircle2, ArrowUpDown, Brain, TrendingUp
 } from "lucide-react";
+import { getStudents, type StudentMatrixEntry } from "@/lib/api";
 
 // Mock student progress data matching student portal's general values
 interface StudentProgress {
@@ -38,226 +38,31 @@ interface StudentProgress {
   }[];
 }
 
-const mockStudents: StudentProgress[] = [
-  { 
-    rank: 1, 
-    initials: "MC", 
-    name: "Michael Chen", 
-    rollNumber: "NST-2023-0012", 
-    branch: "CS", 
-    year: "2023-2027", 
-    xp: 18900, 
-    alignment: 94, 
-    solved: 320, 
-    easy: 180, 
-    medium: 110, 
-    hard: 30,
-    change: "—",
-    mentoredByMe: true,
-    lastActive: "5 mins ago",
-    subjectBreakdown: { dsa: 96, sysdesign: 90, webdev: 95, dbms: 92, cloud: 88 },
-    recentMocks: [
-      { topic: "DSA Mock Interview", score: 4.9, date: "2 days ago" },
-      { topic: "System Design Mock", score: 4.8, date: "1 week ago" }
-    ]
-  },
-  { 
-    rank: 2, 
-    initials: "SJ", 
-    name: "Sarah Jenkins", 
-    rollNumber: "NST-2023-0045", 
-    branch: "CS-AI", 
-    year: "2023-2027", 
-    xp: 14250, 
-    alignment: 88, 
-    solved: 280, 
-    easy: 150, 
-    medium: 100, 
-    hard: 30,
-    change: "—",
+// Maps StudentMatrixEntry from API to the local StudentProgress shape
+function mapStudent(s: StudentMatrixEntry, idx: number): StudentProgress {
+  return {
+    rank: idx + 1,
+    initials: s.fullName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase(),
+    name: s.fullName,
+    rollNumber: s.studentId,
+    branch: s.branch,
+    year: s.year,
+    xp: s.xpTotal,
+    alignment: Math.min(100, Math.round(s.totalSolved / 3)),
+    solved: s.totalSolved,
+    easy: Math.round(s.totalSolved * 0.5),
+    medium: Math.round(s.totalSolved * 0.35),
+    hard: Math.round(s.totalSolved * 0.15),
+    change: s.rankChange || "—",
     mentoredByMe: false,
-    lastActive: "2 hrs ago",
-    subjectBreakdown: { dsa: 92, sysdesign: 80, webdev: 88, dbms: 90, cloud: 85 },
-    recentMocks: [
-      { topic: "System Design Mock", score: 4.7, date: "3 days ago" },
-      { topic: "Web Development Mock", score: 4.6, date: "2 weeks ago" }
-    ]
-  },
-  { 
-    rank: 3, 
-    initials: "ED", 
-    name: "Emily Davis", 
-    rollNumber: "NST-2023-0098", 
-    branch: "CS", 
-    year: "2023-2027", 
-    xp: 13800, 
-    alignment: 85, 
-    solved: 240, 
-    easy: 120, 
-    medium: 95, 
-    hard: 25,
-    change: "—",
-    mentoredByMe: true,
-    lastActive: "1 day ago",
-    subjectBreakdown: { dsa: 88, sysdesign: 75, webdev: 85, dbms: 88, cloud: 82 },
-    recentMocks: [
-      { topic: "DBMS & SQL Mock", score: 4.5, date: "5 days ago" },
-      { topic: "DSA Mock Interview", score: 4.4, date: "10 days ago" }
-    ]
-  },
-  { 
-    rank: 4, 
-    initials: "DK", 
-    name: "David Kim", 
-    rollNumber: "NST-2023-0021", 
-    branch: "CS-DS", 
-    year: "2023-2027", 
-    xp: 12450, 
-    alignment: 82, 
-    solved: 210, 
-    easy: 110, 
-    medium: 80, 
-    hard: 20,
-    change: "↑ 2",
-    mentoredByMe: false,
-    lastActive: "2 hrs ago",
-    subjectBreakdown: { dsa: 85, sysdesign: 70, webdev: 80, dbms: 85, cloud: 78 },
-    recentMocks: [
-      { topic: "Cloud Computing Mock", score: 4.2, date: "1 day ago" },
-      { topic: "DSA Mock Interview", score: 4.6, date: "1 week ago" }
-    ]
-  },
-  { 
-    rank: 5, 
-    initials: "AJ", 
-    name: "Alex Johnson", 
-    rollNumber: "NST-2023-0078", 
-    branch: "CS-AI", 
-    year: "2024-2028", 
-    xp: 11920, 
-    alignment: 79, 
-    solved: 195, 
-    easy: 100, 
-    medium: 75, 
-    hard: 20,
-    change: "— 0",
-    mentoredByMe: true,
-    lastActive: "5 mins ago",
-    subjectBreakdown: { dsa: 80, sysdesign: 68, webdev: 78, dbms: 82, cloud: 75 },
-    recentMocks: [
-      { topic: "DSA Mock Interview", score: 4.3, date: "4 days ago" },
-      { topic: "Web Development Mock", score: 4.5, date: "1 week ago" }
-    ]
-  },
-  { 
-    rank: 6, 
-    initials: "RJ", 
-    name: "Rachel Jones", 
-    rollNumber: "NST-2023-0089", 
-    branch: "CS", 
-    year: "2024-2028", 
-    xp: 11100, 
-    alignment: 75, 
-    solved: 180, 
-    easy: 90, 
-    medium: 70, 
-    hard: 20,
-    change: "↓ 1",
-    mentoredByMe: false,
-    lastActive: "1 day ago",
-    subjectBreakdown: { dsa: 76, sysdesign: 62, webdev: 75, dbms: 78, cloud: 70 },
-    recentMocks: [
-      { topic: "DBMS & SQL Mock", score: 4.1, date: "1 week ago" }
-    ]
-  },
-  { 
-    rank: 7, 
-    initials: "MG", 
-    name: "Maria Garcia", 
-    rollNumber: "NST-2023-0102", 
-    branch: "CS-DS", 
-    year: "2024-2028", 
-    xp: 10850, 
-    alignment: 72, 
-    solved: 170, 
-    easy: 85, 
-    medium: 65, 
-    hard: 20,
-    change: "↑ 5",
-    mentoredByMe: false,
-    lastActive: "3 hrs ago",
-    subjectBreakdown: { dsa: 75, sysdesign: 58, webdev: 72, dbms: 75, cloud: 68 },
-    recentMocks: [
-      { topic: "System Design Mock", score: 4.0, date: "6 days ago" }
-    ]
-  },
-  { 
-    rank: 8, 
-    initials: "AP", 
-    name: "Aarav Patel", 
-    rollNumber: "NST-2023-0056", 
-    branch: "CS-AI", 
-    year: "2025-2029", 
-    xp: 9800, 
-    alignment: 68, 
-    solved: 150, 
-    easy: 70, 
-    medium: 60, 
-    hard: 20,
-    change: "↑ 1",
-    mentoredByMe: true,
-    lastActive: "2 hrs ago",
-    subjectBreakdown: { dsa: 70, sysdesign: 50, webdev: 65, dbms: 70, cloud: 60 },
-    recentMocks: [
-      { topic: "DSA Mock Interview", score: 4.2, date: "2 hours ago" }
-    ]
-  },
-  { 
-    rank: 9, 
-    initials: "MS", 
-    name: "Maya Singh", 
-    rollNumber: "NST-2023-0111", 
-    branch: "CS", 
-    year: "2025-2029", 
-    xp: 8900, 
-    alignment: 62, 
-    solved: 130, 
-    easy: 60, 
-    medium: 55, 
-    hard: 15,
-    change: "↓ 2",
-    mentoredByMe: true,
-    lastActive: "5 days ago",
-    subjectBreakdown: { dsa: 65, sysdesign: 40, webdev: 60, dbms: 65, cloud: 52 },
-    recentMocks: [
-      { topic: "System Design Mock", score: 3.8, date: "5 days ago" }
-    ]
-  },
-  { 
-    rank: 10, 
-    initials: "RS", 
-    name: "Rohan Sharma", 
-    rollNumber: "NST-2023-0004", 
-    branch: "CS", 
-    year: "2025-2029", 
-    xp: 7200, 
-    alignment: 55, 
-    solved: 105, 
-    easy: 50, 
-    medium: 45, 
-    hard: 10,
-    change: "—",
-    mentoredByMe: false,
-    lastActive: "1 week ago",
-    subjectBreakdown: { dsa: 58, sysdesign: 35, webdev: 52, dbms: 55, cloud: 45 },
-    recentMocks: [
-      { topic: "DSA Mock Interview", score: 3.5, date: "1 week ago" }
-    ]
-  }
-];
+    lastActive: s.lastActiveAt ? new Date(s.lastActiveAt).toLocaleDateString() : "Unknown",
+    subjectBreakdown: s.subjectBreakdown || { dsa: 70, sysdesign: 50, webdev: 60, dbms: 65, cloud: 55 },
+    recentMocks: s.recentMocks || [],
+  };
+}
 
 export default function StudentMatrixPage() {
-  const [students, setStudents] = useState<StudentProgress[]>(mockStudents);
+  const [students, setStudents] = useState<StudentProgress[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [branchFilter, setBranchFilter] = useState("All");
   const [yearFilter, setYearFilter] = useState("All");
@@ -270,8 +75,12 @@ export default function StudentMatrixPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 500);
-    return () => clearTimeout(t);
+    getStudents()
+      .then(({ students: raw }) => {
+        setStudents(raw.map(mapStudent));
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   }, []);
 
   useEffect(() => {

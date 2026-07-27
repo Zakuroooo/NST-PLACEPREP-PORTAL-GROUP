@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
-import { Search, X, ChevronLeft, ChevronRight, ArrowUpRight, Users, TrendingUp, Briefcase, GraduationCap } from "lucide-react";
+import { Search, X, ChevronLeft, ChevronRight, ArrowUpRight, Users, TrendingUp, Briefcase, GraduationCap, UserX } from "lucide-react";
 import { useStudents } from "@/lib/hooks";
-import { mockStudents } from "@/lib/mock-data";
 
 // Avatar color palette — deterministic from name
 const AVATAR_COLORS = [
@@ -53,14 +52,16 @@ export default function StudentsPage() {
     return () => clearTimeout(h);
   }, [searchInput]);
 
-  const { students, total, isLoading } = useStudents(currentPage, itemsPerPage, debouncedSearch);
+  const { students, total, isLoading } = useStudents(currentPage, itemsPerPage, debouncedSearch, selectedBatch);
   const totalPages = Math.ceil(total / itemsPerPage);
 
-  // Summary stats
-  const totalCount  = mockStudents.length;
-  const placedCount = mockStudents.filter(s => s.status === "PLACED").length;
-  const avgProg     = Math.round(mockStudents.reduce((a, s) => a + s.progress, 0) / totalCount);
-  const batches     = new Set(mockStudents.map(s => s.batch)).size;
+  // Summary stats — derived from real API total
+  const totalCount  = total;
+  const placedCount = students.filter((s: any) => s.placementStatus === 'PLACED' || s.status === 'PLACED').length;
+  const avgProg     = students.length > 0
+    ? Math.round(students.reduce((a: number, s: any) => a + (s.progress ?? s.xpTotal ?? 0) / 100, 0) / students.length)
+    : 0;
+  const batches = new Set(students.map((s: any) => s.batch ?? s.year)).size;
 
   const BATCH_OPTIONS = ["All", "2023", "2024", "2025", "2026"];
 
@@ -147,11 +148,26 @@ export default function StudentsPage() {
             </thead>
             <tbody>
               {isLoading ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center">
-                    <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
-                  </td>
-                </tr>
+                // Skeleton rows — matches table columns: avatar | batch | progress bar | doubts | sessions | status | action
+                Array.from({ length: 5 }).map((_, i) => (
+                  <tr key={i} className="border-b border-gray-50 animate-pulse">
+                    <td className="px-6 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-full bg-gray-200 shrink-0" />
+                        <div className="space-y-1.5">
+                          <div className="h-3.5 w-28 bg-gray-200 rounded" />
+                          <div className="h-3 w-16 bg-gray-100 rounded" />
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3"><div className="h-5 w-12 bg-gray-100 rounded" /></td>
+                    <td className="px-6 py-3"><div className="h-2 w-28 bg-gray-200 rounded-full" /></td>
+                    <td className="px-6 py-3 text-center"><div className="h-4 w-4 bg-gray-200 rounded mx-auto" /></td>
+                    <td className="px-6 py-3 text-center"><div className="h-4 w-4 bg-gray-200 rounded mx-auto" /></td>
+                    <td className="px-6 py-3"><div className="h-5 w-20 bg-gray-100 rounded-full" /></td>
+                    <td className="px-6 py-3" />
+                  </tr>
+                ))
               ) : students.length > 0 ? students.map((s, idx) => {
                 const st = STATUS_STYLES[s.status] ?? STATUS_STYLES["IN PROGRESS"];
                 return (
@@ -162,11 +178,11 @@ export default function StudentsPage() {
                     {/* Name + avatar */}
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2.5">
-                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColor(s.name)} text-white text-sm font-bold flex items-center justify-center shrink-0 shadow-sm`}>
-                          {initials(s.name)}
+                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${avatarColor(s.fullName ?? s.name ?? '')} text-white text-sm font-bold flex items-center justify-center shrink-0 shadow-sm`}>
+                          {initials(s.fullName ?? s.name ?? '?')}
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-gray-900 leading-tight">{s.name}</p>
+                          <p className="text-sm font-semibold text-gray-900 leading-tight">{s.fullName ?? s.name}</p>
                           <p className="text-xs text-gray-400">ID #{s.id.toString().padStart(4, "0")}</p>
                         </div>
                       </div>
@@ -200,8 +216,10 @@ export default function StudentsPage() {
                 );
               }) : (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-sm text-gray-400">
-                    No students found.
+                  <td colSpan={7} className="py-14 text-center">
+                    <UserX className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-gray-400">No students found.</p>
+                    <p className="text-xs text-gray-300 mt-1">Try clearing your search or filter.</p>
                   </td>
                 </tr>
               )}

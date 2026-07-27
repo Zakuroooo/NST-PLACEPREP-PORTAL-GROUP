@@ -52,144 +52,7 @@ interface Experience {
   rounds: InterviewRound[];
 }
 
-const initialExperiences: Experience[] = [
-  {
-    id: 1,
-    company: "Google",
-    logoUrl: logos.Google,
-    role: "Software Engineering Intern",
-    roundsCount: 3,
-    problemsCount: 3,
-    outcome: "offer",
-    difficulty: "Medium",
-    workType: "Remote",
-    experience: "Google interviews are fast-paced and time-bound, so it is crucial to practice with that environment in mind. Don't underestimate the importance of edge case discussions, dry runs, and being able to explain your solution with confidence.",
-    author: "Agrawal",
-    authorRole: "Final-year student",
-    postedAgo: "380 days ago",
-    upvotes: 389,
-    hasUpvoted: false,
-    hasBookmarked: false,
-    rounds: [
-      { roundNumber: 1, type: "DSA Coding", topics: ["Arrays", "Sliding Window"], description: "Asked 2 medium coding questions on array manipulation and sliding window. The interviewer focused heavily on code quality and optimizing space complexity.", cleared: true },
-      { roundNumber: 2, type: "DSA Coding", topics: ["Dynamic Programming", "Trees"], description: "Asked to optimize a 2D dynamic programming problem on grid pathfinding. Then a follow-up on representing the grid as a graph/tree.", cleared: true },
-      { roundNumber: 3, type: "HR / Googlyness", topics: ["Behavioral", "Googlyness"], description: "Standard behavioral questions using STAR method. Focused on conflict resolution, leadership traits, and team alignment.", cleared: true }
-    ]
-  },
-  {
-    id: 2,
-    company: "Amazon",
-    logoUrl: logos.Amazon,
-    role: "SDE Intern (6M)",
-    roundsCount: 1,
-    problemsCount: 2,
-    outcome: "offer",
-    difficulty: "Medium",
-    workType: "On-site",
-    experience: "The SDE Intern process at Amazon was direct. Mostly focused on core data structures and standard Amazon Leadership Principles. Make sure you tie every behavioral answer back to leadership principles.",
-    author: "Verma",
-    authorRole: "Pre-final year student",
-    postedAgo: "12 days ago",
-    upvotes: 237,
-    hasUpvoted: false,
-    hasBookmarked: false,
-    rounds: [
-      { roundNumber: 1, type: "DSA Coding", topics: ["Heaps", "Graphs"], description: "Asked to implement a min-heap based priority queue for task scheduling. The second question was finding shortest path in a weighted graph.", cleared: true }
-    ]
-  },
-  {
-    id: 3,
-    company: "Microsoft",
-    logoUrl: logos.Microsoft,
-    role: "SDE-1",
-    roundsCount: 4,
-    problemsCount: 5,
-    outcome: "offer",
-    difficulty: "Hard",
-    workType: "Hybrid",
-    experience: "Focused heavily on operating systems, system architecture, and low-level data structures. They expect clean code and a deep understanding of memory management. Be prepared for dry-running code.",
-    author: "Ranjan",
-    authorRole: "Alumnus (2025)",
-    postedAgo: "30 days ago",
-    upvotes: 184,
-    hasUpvoted: false,
-    hasBookmarked: false,
-    rounds: [
-      { roundNumber: 1, type: "Online Assessment", topics: ["Algorithms", "Bit Manipulation"], description: "Three tasks focusing on bit-level operations and sorting algorithms. 90 minutes limit.", cleared: true },
-      { roundNumber: 2, type: "DSA Coding", topics: ["Linked Lists", "Trees"], description: "Standard MS coding round: reverse nodes in k-group and check if binary tree is BST.", cleared: true },
-      { roundNumber: 3, type: "System Design", topics: ["LLD", "Design Patterns"], description: "Designed a parking lot system. Interviewer checked object-oriented design and SOLID principles.", cleared: true },
-      { roundNumber: 4, type: "HR", topics: ["Resume Review", "Behavioral"], description: "Detailed walkthrough of past internship projects and questions about work ethic and collaboration.", cleared: true }
-    ]
-  },
-  {
-    id: 4,
-    company: "Uber",
-    logoUrl: logos.Uber,
-    role: "Software Engineer (L4)",
-    roundsCount: 4,
-    problemsCount: 3,
-    outcome: "offer",
-    difficulty: "Hard",
-    workType: "On-site",
-    experience: "Uber's L4 interviews focus on highly scalable architecture and advanced graphs/algorithms. Be prepared to dive deep into system trade-offs and latency.",
-    author: "Sharma",
-    authorRole: "NST Student",
-    postedAgo: "2 days ago",
-    upvotes: 95,
-    hasUpvoted: false,
-    hasBookmarked: false,
-    rounds: [
-      { roundNumber: 1, type: "DSA Coding", topics: ["Graphs", "Shortest Path"], description: "Standard graph optimization problem with custom constraints.", cleared: true },
-      { roundNumber: 2, type: "DSA Coding", topics: ["Dynamic Programming"], description: "Asked to optimize a 2D dynamic programming problem with space optimizations.", cleared: true },
-      { roundNumber: 3, type: "System Design", topics: ["System Design", "Graphs"], description: "Designed a distributed rate limiter and ride matching system.", cleared: true },
-      { roundNumber: 4, type: "HR", topics: ["Behavioral"], description: "Behavioral interview focused on customer obsession and dealing with ambiguity.", cleared: true }
-    ]
-  },
-  {
-    id: 5,
-    company: "Meta",
-    logoUrl: logos.Meta,
-    role: "Production Engineer",
-    roundsCount: 5,
-    problemsCount: 4,
-    outcome: "offer",
-    difficulty: "Medium",
-    workType: "Hybrid",
-    experience: "Meta checks system internals, scripting ability, and practical troubleshooting. Expect systems and networks design with focus on scalability.",
-    author: "Patel",
-    authorRole: "NST Student",
-    postedAgo: "5 days ago",
-    upvotes: 82,
-    hasUpvoted: false,
-    hasBookmarked: false,
-    rounds: [
-      { roundNumber: 1, type: "Systems Coding", topics: ["Linux", "Python"], description: "Scripting and systems automation tools analysis.", cleared: true },
-      { roundNumber: 2, type: "Systems Networking", topics: ["OS", "Networking"], description: "Troubleshooting Linux system performance, memory bottlenecks and network congestion issues.", cleared: true }
-    ]
-  },
-  {
-    id: 6,
-    company: "Apple",
-    logoUrl: logos.Apple,
-    role: "Frontend Engineer",
-    roundsCount: 3,
-    problemsCount: 2,
-    outcome: "offer",
-    difficulty: "Medium",
-    workType: "On-site",
-    experience: "Apple values perfection in UI rendering, web performance, and core JS knowledge. Brush up on DOM rendering lifecycles and layout optimization.",
-    author: "Das",
-    authorRole: "NST Student",
-    postedAgo: "1 week ago",
-    upvotes: 64,
-    hasUpvoted: false,
-    hasBookmarked: false,
-    rounds: [
-      { roundNumber: 1, type: "Frontend Coding", topics: ["React", "JS Core"], description: "Built custom component implementing performant list virtualization.", cleared: true },
-      { roundNumber: 2, type: "UI Architecture", topics: ["Web Performance", "System Design"], description: "Design a client-side telemetry and logging system with offline caching support.", cleared: true }
-    ]
-  }
-];
+
 
 const popularCompanies = [
   { name: "Amazon", slug: "amazon", logo: logos.Amazon, type: "Product Based", count: 51 },
@@ -203,8 +66,51 @@ const popularCompanies = [
 function SubmitContent() {
   const { setOnSubmitClick } = useNavbar();
   const searchParams = useSearchParams();
-  const [experiences, setExperiences] = useState<Experience[]>(initialExperiences);
+  const [experiences, setExperiences] = useState<Experience[]>([]);
+  const [loadingExp, setLoadingExp] = useState(true);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+
+  // Load experiences from API on mount
+  useEffect(() => {
+    fetch('/api/experiences', { credentials: 'include' })
+      .then(r => r.json())
+      .then(json => {
+        const raw = json?.data?.experiences ?? json?.experiences ?? json?.data ?? [];
+        if (Array.isArray(raw) && raw.length > 0) {
+          const mapped = raw.map((e: any) => ({
+            id:           e._id ?? e.id ?? Date.now(),
+            company:      e.companyName ?? e.company ?? '',
+            logoUrl:      logos[e.companyName ?? e.company ?? ''] || logos.Google,
+            role:         e.role ?? '',
+            roundsCount:  e.rounds?.length ?? e.roundsCount ?? 1,
+            problemsCount: e.problemsCount ?? 0,
+            outcome:      e.outcome ?? 'waiting',
+            difficulty:   e.difficulty ?? 'Medium',
+            workType:     e.workType ?? 'Hybrid',
+            experience:   e.experienceText ?? e.experience ?? '',
+            author:       e.authorName ?? e.author ?? 'Student',
+            authorRole:   e.authorRole ?? 'NST Student',
+            postedAgo:    e.createdAt ? new Date(e.createdAt).toLocaleDateString() : 'Recently',
+            upvotes:      e.upvotes ?? 0,
+            hasUpvoted:   e.hasUpvoted ?? false,
+            hasBookmarked: e.hasBookmarked ?? false,
+            rounds:       (e.rounds ?? []).map((r: any, i: number) => ({
+              roundNumber:  i + 1,
+              type:         r.type ?? 'DSA Coding',
+              topics:       r.topics ?? [],
+              description:  r.description ?? '',
+              cleared:      r.cleared ?? true,
+            })),
+          }));
+          setExperiences(mapped);
+        } else {
+          // API returned empty, clear experiences
+          setExperiences([]);
+        }
+      })
+      .catch(() => setExperiences([]))
+      .finally(() => setLoadingExp(false));
+  }, []);
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -356,15 +262,16 @@ function SubmitContent() {
     clearForm();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formExperienceText.trim()) {
       alert("Please describe your interview experience.");
       return;
     }
 
+    const optimisticId = Date.now();
     const newExp: Experience = {
-      id: Date.now(),
+      id: optimisticId,
       company: formCompany,
       logoUrl: logos[formCompany] || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=100&auto=format&fit=crop&q=60",
       role: formRole,
@@ -389,8 +296,41 @@ function SubmitContent() {
       })),
     };
 
-    setExperiences([newExp, ...experiences]);
+    // Optimistic update
+    setExperiences(prev => [newExp, ...prev]);
     setFormSubmitted(true);
+
+    // POST to real API
+    try {
+      const res = await fetch('/api/experiences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          companySlug:       formCompany.toLowerCase().replace(/\s+/g, '-'),
+          role:              formRole,
+          outcome:           formOutcome,
+          overallDifficulty: newExp.difficulty,
+          experienceText:    formExperienceText,
+          tips:              formTipsText || undefined,
+          rounds:            newExp.rounds,
+          roundsCount:       Number(formRoundsCount) || 1,
+          interviewDate:     formDate || new Date().toISOString().split('T')[0],
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const saved = json?.data;
+        if (saved?._id) {
+          // Replace optimistic entry with real ID
+          setExperiences(prev => prev.map(exp =>
+            exp.id === optimisticId ? { ...exp, id: saved._id } : exp
+          ));
+        }
+      }
+    } catch {
+      // Keep optimistic entry even on network failure
+    }
   };
 
   // Filter & Sort Logic

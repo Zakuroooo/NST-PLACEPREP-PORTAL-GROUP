@@ -1,30 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Building2, ArrowDownAZ, ArrowUpNarrowWide, ArrowDownWideNarrow, Search, Trophy } from "lucide-react";
-import { mockCompaniesRankings } from "@/lib/mock-data";
-import { CompanyRanking } from "@/lib/mock-data";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then(r => r.json());
+
+type CompanyRanking = {
+  _id?: string;
+  name: string;
+  slug: string;
+  category?: string;
+  alignmentScore?: number;
+  topTestedSubject?: string;
+  hiringStatus?: string;
+};
 
 type SortOption = "name_asc" | "name_desc" | "score_asc" | "score_desc";
 
 export default function RankingsPage() {
   const [sortOption, setSortOption] = useState<SortOption>("score_desc");
   const [searchQuery, setSearchQuery] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 500);
-    return () => clearTimeout(t);
-  }, []);
+  const { data, isLoading } = useSWR('/api/faculty/rankings', fetcher);
+  const rawCompanies: CompanyRanking[] = data?.data?.companies ?? data?.companies ?? [];
 
-  const sortedCompanies = [...mockCompaniesRankings]
+  const sortedCompanies = [...rawCompanies]
     .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
       switch (sortOption) {
         case "name_asc": return a.name.localeCompare(b.name);
         case "name_desc": return b.name.localeCompare(a.name);
-        case "score_asc": return a.alignmentScore - b.alignmentScore;
-        case "score_desc": return b.alignmentScore - a.alignmentScore;
+        case "score_asc": return (a.alignmentScore ?? 0) - (b.alignmentScore ?? 0);
+        case "score_desc": return (b.alignmentScore ?? 0) - (a.alignmentScore ?? 0);
         default: return 0;
       }
     });
@@ -149,7 +157,7 @@ export default function RankingsPage() {
                           </div>
                           <div>
                             <p className="font-bold text-gray-900">{company.name}</p>
-                            <div className="mt-0.5">{getCategoryBadge(company.category)}</div>
+                            <div className="mt-0.5">{getCategoryBadge(company.category ?? '')}</div>
                           </div>
                         </div>
                       </td>
@@ -162,13 +170,13 @@ export default function RankingsPage() {
                       {/* Score */}
                       <td className="py-4 px-6 text-right">
                         <div className="flex flex-col items-end gap-1.5">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full font-black text-xs border ${getScoreColor(company.alignmentScore)}`}>
-                            {company.alignmentScore}%
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full font-black text-xs border ${getScoreColor(company.alignmentScore ?? 0)}`}>
+                            {company.alignmentScore ?? 0}%
                           </span>
                           <div className="w-20 h-1.5 rounded-full bg-gray-100 overflow-hidden">
                             <div
-                              className={`h-full rounded-full ${getScoreBar(company.alignmentScore)} transition-all`}
-                              style={{ width: `${company.alignmentScore}%` }}
+                              className={`h-full rounded-full ${getScoreBar(company.alignmentScore ?? 0)} transition-all`}
+                              style={{ width: `${company.alignmentScore ?? 0}%` }}
                             />
                           </div>
                         </div>

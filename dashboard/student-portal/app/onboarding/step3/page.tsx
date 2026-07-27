@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, ArrowLeft, Info } from "lucide-react";
 import Stepper from "@/components/onboarding/Stepper";
-import { CompanyCategory, getTopicsForCategories, TopicRating } from "@/lib/mock-data";
+import { type CompanyCategory, getTopicsForCategories, type TopicRating } from "@/lib/constants";
 
 const durations = ["4 weeks", "8 weeks", "12 weeks", "16 weeks", "24 weeks"];
 
@@ -126,7 +126,13 @@ export default function SelfRatingPage() {
               <ArrowLeft className="w-4 h-4" /> Back
             </button>
             <button
-              onClick={() => router.push("/onboarding/step4")}
+              onClick={() => {
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("onboarding_ratings", JSON.stringify(ratings));
+                  sessionStorage.setItem("onboarding_weeks", time.split(' ')[0]);
+                }
+                router.push("/onboarding/step4");
+              }}
               className="flex-1 bg-gray-900 text-white rounded-lg py-3 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors"
             >
               Generate Roadmap <ArrowRight className="w-4 h-4" />

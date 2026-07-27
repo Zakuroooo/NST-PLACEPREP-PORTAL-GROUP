@@ -123,7 +123,7 @@ export default function BookingsPage() {
           <h2 className="text-sm font-semibold text-gray-800">Top Faculty by Booking Demand</h2>
         </div>
         <div className="space-y-3">
-          {data.topFaculty.map((f, i) => {
+          {(data.topFaculty as { facultyId: string; name: string; bookings: number }[]).map((f, i) => {
             const maxBookings = data.topFaculty[0]?.bookings ?? 1;
             const pct = (f.bookings / maxBookings) * 100;
             const rankColors = ["text-blue-600 bg-blue-50", "text-indigo-600 bg-indigo-50", "text-cyan-600 bg-cyan-50"];
@@ -132,7 +132,7 @@ export default function BookingsPage() {
               <div key={f.facultyId} className="flex items-center gap-3">
                 <span className={`text-[10px] font-bold w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${rankCls}`}>#{i + 1}</span>
                 <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-700 shrink-0">
-                  {f.name.split(" ").map((n) => n[0]).join("").slice(0, 2)}
+                  {f.name.split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
                 </div>
                 <span className="text-xs font-semibold text-gray-800 flex-1 min-w-0 truncate">{f.name}</span>
                 <DemandDots pct={pct} />

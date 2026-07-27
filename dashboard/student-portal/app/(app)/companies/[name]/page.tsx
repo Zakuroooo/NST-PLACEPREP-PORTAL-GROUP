@@ -1,5 +1,5 @@
 "use client";
-import { useState, use } from "react";
+import { useState, use, useMemo } from "react";
 import Link from "next/link";
 import {
   BarChart2, Target, Layers, TrendingUp, ChevronRight,
@@ -11,7 +11,15 @@ import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip,
   Legend, CartesianGrid,
 } from "recharts";
-import { getCompanyIntel, getCompanyBg, type RoundGroup, type Question } from "@/lib/mock-data";
+import { useCompany } from "@/lib/hooks";
+
+interface RoundGroup {
+  round: string;
+  name: string;
+  description: string;
+  type: string;
+  questions: any[];
+}
 
 const TABS = ["Overview", "Questions", "Experiences", "Trends"] as const;
 type Tab = typeof TABS[number];
@@ -64,7 +72,7 @@ function RoundAccordion({ group }: { group: RoundGroup }) {
       {open && (
         <div className="divide-y divide-gray-50">
           {group.questions.map((q) => (
-            <QuestionRow key={q.id} q={q} />
+            <QuestionRow key={q._id} q={q} />
           ))}
         </div>
       )}
@@ -72,7 +80,7 @@ function RoundAccordion({ group }: { group: RoundGroup }) {
   );
 }
 
-function QuestionRow({ q }: { q: Question }) {
+function QuestionRow({ q }: { q: any }) {
   const diffBadge = (d: string) =>
     d === "Easy"   ? "bg-green-50 text-green-700" :
     d === "Medium" ? "bg-blue-50 text-blue-700" : "bg-red-50 text-red-600";
@@ -123,21 +131,70 @@ function QuestionRow({ q }: { q: Question }) {
   );
 }
 
-// ─── Main Company Page ────────────────────────────────────────────
 export default function CompanyPage({ params }: { params: Promise<{ name: string }> }) {
   const { name: slug } = use(params);
-  const intel = getCompanyIntel(slug);
-  const bg = getCompanyBg(slug);
+  
+  const { data: companyRes, isLoading } = useCompany(slug);
+  const company = companyRes?.data ?? companyRes;
 
   const [activeTab, setActiveTab] = useState<Tab>("Overview");
   const [role, setRole] = useState("SDE-1 (L3)");
 
-  const displayName = intel.name || (slug.charAt(0).toUpperCase() + slug.slice(1));
+  const displayName = company?.name || (slug.charAt(0).toUpperCase() + slug.slice(1));
   const initial = displayName.charAt(0);
 
-  const totalQuestionCount = intel.roundQuestions.reduce(
-    (acc, g) => acc + g.questions.length, 0
-  );
+  const roundQuestions: RoundGroup[] = useMemo(() => {
+    if (!company?.questions) return [];
+    const grouped = company.questions.reduce((acc: any, q: any) => {
+      const rt = q.roundType || 'Coding';
+      if (!acc[rt]) acc[rt] = [];
+      acc[rt].push(q);
+      return acc;
+    }, {});
+    return Object.entries(grouped).map(([type, qs]) => ({
+      type,
+      round: "R",
+      name: `${type} Round`,
+      description: `Questions typical for ${type} rounds.`,
+      questions: qs as any[]
+    }));
+  }, [company?.questions]);
+
+  const totalQuestionCount = company?.questions?.length || 0;
+
+  if (isLoading) return <div className="p-8 text-center text-gray-500">Loading company details...</div>;
+  if (!company) return <div className="p-8 text-center text-red-500">Company not found</div>;
+
+  const intel = {
+    hiringStatus: company.hiringStatus || "Active Hiring",
+    avgProcess: company.avgProcessWeeks ? `${company.avgProcessWeeks} Weeks` : "3-4 Weeks",
+    hiringNote: company.hiringNote || "No specific hiring note available.",
+    successRate: company.successRate || "N/A",
+    avgSalary: company.avgSalaryLpa ? `₹${company.avgSalaryLpa} LPA` : "N/A",
+    difficulty: "7.5",
+    totalQuestions: totalQuestionCount,
+    roundStructure: company.roundStructure?.map((r: any) => ({
+      n: r.roundNumber,
+      name: r.roundName,
+      dur: `${r.typicalDurationMin || 45} mins • ${r.roundType}`
+    })) || [],
+    topTopics: company.topicFrequency?.map((t: any) => ({
+      topic: t.topicName,
+      pct: t.frequencyPct
+    })) || [],
+    difficultyBreakdown: company.difficultyDistribution ? [
+      { name: "Easy", value: company.difficultyDistribution.Easy || 0, color: "#10B981" },
+      { name: "Medium", value: company.difficultyDistribution.Medium || 0, color: "#F59E0B" },
+      { name: "Hard", value: company.difficultyDistribution.Hard || 0, color: "#EF4444" },
+    ] : [],
+    trendData: [
+      { year: "2022", DSA: 60, SystemDesign: 20, Behavioral: 20 },
+      { year: "2023", DSA: 55, SystemDesign: 25, Behavioral: 20 },
+      { year: "2024", DSA: 50, SystemDesign: 30, Behavioral: 20 },
+      { year: "2025", DSA: 45, SystemDesign: 35, Behavioral: 20 },
+    ],
+    sampleQuestions: company.questions?.slice(0, 3) || [],
+  };
 
   return (
     <div className="max-w-6xl">
@@ -270,7 +327,7 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
           <div className="col-span-3 bg-white border border-gray-200 rounded-xl p-6">
             <h3 className="font-semibold text-gray-900 mb-4">Standard Round Structure</h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {intel.roundStructure.map((r) => (
+              {intel.roundStructure.map((r: any) => (
                 <div key={r.n} className="border border-gray-200 rounded-xl p-4 text-center">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold mx-auto mb-3 ${
@@ -316,7 +373,7 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 mb-4">Top Topics</h3>
             <div className="space-y-2.5">
-              {intel.topTopics.map((t) => (
+              {intel.topTopics.map((t: any) => (
                 <div key={t.topic}>
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-gray-700">{t.topic}</span>
@@ -350,7 +407,7 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
               </div>
             </div>
             <div className="flex justify-center gap-4 mt-3 text-xs">
-              {intel.difficultyBreakdown.map((d) => (
+              {intel.difficultyBreakdown.map((d: any) => (
                 <div key={d.name} className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
                   <span className="text-gray-600">{d.name} ({d.value}%)</span>
@@ -371,8 +428,8 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
               </button>
             </div>
             <div className="space-y-0">
-              {intel.sampleQuestions.map((q) => (
-                <QuestionRow key={q.id} q={q} />
+              {intel.sampleQuestions.map((q: any) => (
+                <QuestionRow key={q._id || q.id} q={q} />
               ))}
             </div>
           </div>
@@ -400,12 +457,12 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
             </Link>
           </div>
 
-          {intel.roundQuestions.length === 0 ? (
+          {roundQuestions.length === 0 ? (
             <div className="text-center py-16 text-gray-400 text-sm">
               No questions tagged yet for {displayName}. Check back soon.
             </div>
           ) : (
-            intel.roundQuestions.map((group) => (
+            roundQuestions.map((group) => (
               <RoundAccordion key={group.type} group={group} />
             ))
           )}
@@ -434,8 +491,10 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
       {/* ── Experiences Tab ──────────────────────────────────────── */}
       {activeTab === "Experiences" && (
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-xl p-5">
+          {(!company.experiences || company.experiences.length === 0) ? (
+            <div className="text-center py-8 text-gray-400 text-sm">No experiences available yet.</div>
+          ) : company.experiences.map((exp: any, i: number) => (
+            <div key={exp._id || i} className="bg-white border border-gray-200 rounded-xl p-5">
               <div className="flex items-center gap-3 mb-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -447,23 +506,26 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
                 <div>
                   <span className="font-medium text-gray-900 text-sm">{displayName}</span>
                   <span className="text-xs text-gray-500 ml-2">
-                    SDE-1 • {i === 1 ? "Jan 2026" : i === 2 ? "Dec 2025" : "Nov 2025"}
+                    {exp.roleTitle || "Software Engineer"} • {new Date(exp.createdAt).toLocaleDateString()}
                   </span>
                 </div>
                 <span className="ml-auto text-xs font-medium text-green-700 bg-green-50 rounded px-2 py-0.5 flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> Offer Received
+                  <CheckCircle className="w-3 h-3" /> Offer {exp.offerStatus}
                 </span>
               </div>
-              <div className="flex gap-2 mb-3 text-xs text-gray-500">
-                <span className="bg-blue-50 text-blue-700 rounded px-2 py-1">Round 1: Arrays, DP</span>
-                <span className="bg-purple-50 text-purple-700 rounded px-2 py-1">Round 2: System Design</span>
-                <span className="bg-green-50 text-green-700 rounded px-2 py-1">Round 3: HR</span>
+              <div className="flex flex-wrap gap-2 mb-3 text-xs text-gray-500">
+                {exp.roundDetails?.map((r: any, idx: number) => (
+                  <span key={idx} className="bg-blue-50 text-blue-700 rounded px-2 py-1">
+                    Round {r.roundNumber || idx + 1}: {r.roundType}
+                  </span>
+                ))}
               </div>
-              <p className="text-sm text-gray-600">
-                &quot;Arrays and DP were heavily tested in coding rounds. System design was LLD focused.
-                Be ready with STAR stories for behavioral questions.&quot;
+              <p className="text-sm text-gray-600 line-clamp-3">
+                &quot;{exp.content}&quot;
               </p>
-              <p className="text-xs text-gray-400 mt-2">Submitted anonymously · {i * 3} days ago</p>
+              <p className="text-xs text-gray-400 mt-2">
+                Submitted by {exp.isAnonymous ? "Anonymous" : exp.authorName || "Anonymous"}
+              </p>
             </div>
           ))}
 

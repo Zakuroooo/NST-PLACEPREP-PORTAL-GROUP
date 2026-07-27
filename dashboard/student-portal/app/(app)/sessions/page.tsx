@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   CalendarDays, Clock, CheckCircle2, XCircle, AlertCircle,
   Video, ChevronLeft, ChevronRight, X, Send, User,
 } from "lucide-react";
+import { toast } from "sonner";
 
 type SessionStatus = "pending" | "confirmed" | "proposed" | "completed" | "cancelled";
 
@@ -21,31 +22,17 @@ interface Session {
   proposedTime?: string;
 }
 
-const TIME_SLOTS = ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM"];
+const TIME_SLOTS = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00"];
+const TIME_LABELS: Record<string, string> = {
+  "09:00": "9:00 AM", "10:00": "10:00 AM", "11:00": "11:00 AM", "12:00": "12:00 PM",
+  "14:00": "2:00 PM", "15:00": "3:00 PM", "16:00": "4:00 PM", "17:00": "5:00 PM",
+};
 
-const mockSessions: Session[] = [
-  {
-    id: "s1", topic: "System Design Mock Interview",
-    notes: "Want to practice designing a URL shortener end-to-end",
-    date: "2026-06-26", time: "10:00 AM", duration: 60,
-    status: "confirmed", facultyName: "Prof. Sharma",
-    meetLink: "https://meet.jit.si/NST-PlacePrep-s1-x7k2m",
-  },
-  {
-    id: "s2", topic: "DSA Doubt Clearing",
-    notes: "Two-pointer and sliding window patterns",
-    date: "2026-06-28", time: "3:00 PM", duration: 30,
-    status: "proposed", facultyName: "Prof. Sharma",
-    proposedDate: "2026-06-29", proposedTime: "4:00 PM",
-  },
-  {
-    id: "s3", topic: "HR Round Preparation",
-    notes: "STAR method practice for Amazon Leadership Principles",
-    date: "2026-06-20", time: "11:00 AM", duration: 60,
-    status: "completed", facultyName: "Prof. Sharma",
-    meetLink: "https://meet.jit.si/NST-PlacePrep-s3-a8b2c",
-  },
-];
+interface FacultyOption { id: string; name: string; subject: string; }
+
+
+
+
 
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -155,21 +142,51 @@ function MiniCalendar({ onSelect, selected }: { onSelect: (d: string) => void; s
   );
 }
 
+// helper: convert "9:00 AM" legacy or already "HH:mm" to "HH:mm"
+function to24h(t: string): string {
+  if (/^\d{2}:\d{2}$/.test(t)) return t; // already HH:mm
+  const m = t.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+  if (!m) return "09:00";
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  if (m[3].toUpperCase() === "PM" && h !== 12) h += 12;
+  if (m[3].toUpperCase() === "AM" && h === 12) h = 0;
+  return `${String(h).padStart(2, "0")}:${min}`;
+}
+
 // ── Booking Drawer ────────────────────────────────────
 function BookingDrawer({ selectedDate, onClose, onBook }: {
   selectedDate: string;
   onClose: () => void;
-  onBook: (s: Omit<Session, "id" | "status" | "facultyName" | "meetLink">) => void;
+  onBook: (data: { topic: string; notes: string; date: string; time: string; duration: 30 | 60; facultyId: string; facultyName: string }) => void;
 }) {
   const [time, setTime] = useState(TIME_SLOTS[0]);
   const [topic, setTopic] = useState("");
   const [notes, setNotes] = useState("");
   const [duration, setDuration] = useState<30 | 60>(30);
-  const canBook = topic.trim().length > 3;
+  const [facultyList, setFacultyList] = useState<FacultyOption[]>([]);
+  const [facultyId, setFacultyId] = useState("");
+
+  useEffect(() => {
+    fetch("/api/messages/faculty", { credentials: "include" })
+      .then((r) => r.json())
+      .then((json) => {
+        const list: FacultyOption[] = (json?.data?.faculty ?? []).map((f: any) => ({
+          id: f.id,
+          name: f.name,
+          subject: f.subject ?? "Faculty",
+        }));
+        setFacultyList(list);
+        if (list.length > 0) setFacultyId(list[0].id);
+      })
+      .catch(() => {});
+  }, []);
+
+  const canBook = topic.trim().length >= 5 && facultyId.length > 0;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded w-full max-w-md shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded w-full max-w-md shadow-xl overflow-y-auto max-h-[95vh]" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
           <div>
             <h2 className="text-sm font-bold text-gray-900">Book a Session</h2>
@@ -179,6 +196,26 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
         </div>
 
         <div className="px-5 py-4 space-y-4">
+          {/* Faculty selector */}
+          <div>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Select Faculty *</label>
+            {facultyList.length === 0 ? (
+              <p className="text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded px-3 py-2">
+                Loading faculty list...
+              </p>
+            ) : (
+              <select
+                value={facultyId}
+                onChange={(e) => setFacultyId(e.target.value)}
+                className="w-full text-sm border border-gray-200 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {facultyList.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name} — {f.subject}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
           {/* Time slots */}
           <div>
             <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Time Slot</label>
@@ -190,7 +227,7 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
                       ? "bg-blue-600 text-white border-blue-600"
                       : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
                   }`}
-                >{t}</button>
+                >{TIME_LABELS[t] ?? t}</button>
               ))}
             </div>
           </div>
@@ -213,7 +250,7 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
 
           {/* Topic */}
           <div>
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Session Topic</label>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Session Topic *</label>
             <input
               type="text"
               value={topic}
@@ -221,6 +258,9 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
               placeholder="e.g. System Design Mock, DSA Doubt Clearing..."
               className="w-full text-sm border border-gray-200 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
+            {topic.trim().length > 0 && topic.trim().length < 5 && (
+              <p className="text-[11px] text-red-500 mt-1">Topic must be at least 5 characters</p>
+            )}
           </div>
 
           {/* Notes */}
@@ -238,7 +278,7 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
           </div>
 
           <p className="text-xs text-gray-400 bg-gray-50 border border-gray-100 rounded px-3 py-2">
-            A Jitsi Meet link will be shared once faculty confirms.
+            A meet link will be shared once faculty confirms your request.
           </p>
         </div>
 
@@ -246,7 +286,19 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
           <button onClick={onClose} className="text-sm text-gray-500 px-3 py-1.5">Cancel</button>
           <button
             disabled={!canBook}
-            onClick={() => { onBook({ topic, notes, date: selectedDate, time, duration }); onClose(); }}
+            onClick={() => {
+              const selectedFaculty = facultyList.find(f => f.id === facultyId);
+              onBook({
+                topic: topic.trim(),
+                notes: notes.trim(),
+                date: selectedDate,
+                time: to24h(time),
+                duration,
+                facultyId,
+                facultyName: selectedFaculty?.name ?? "Faculty",
+              });
+              onClose();
+            }}
             className={`flex items-center gap-1.5 text-sm font-semibold px-4 py-1.5 rounded ${
               canBook ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-gray-200 text-gray-400 cursor-not-allowed"
             }`}
@@ -323,23 +375,136 @@ function SessionCard({ session, onAcceptProposal }: { session: Session; onAccept
 }
 
 export default function SessionsPage() {
-  const [sessions, setSessions] = useState<Session[]>(mockSessions);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState("");
   const [showBooking, setShowBooking] = useState(false);
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
 
-  const handleBook = (data: Omit<Session, "id" | "status" | "facultyName" | "meetLink">) =>
-    setSessions((prev) => [{ ...data, id: `s${Date.now()}`, status: "pending", facultyName: "Prof. Sharma" }, ...prev]);
+  useEffect(() => {
+    setIsLoading(true);
+    import("@/lib/api").then(({ getSessions }) =>
+      getSessions().then((data) => {
+        const rawSessions = Array.isArray(data) ? data : (data as any).sessions ?? [];
+        const mapped: Session[] = rawSessions.map((s: any) => ({
+          id: s._id ?? s.id,
+          topic: s.topic,
+          notes: s.notes ?? "",
+          // Backend fields: requestedDate (YYYY-MM-DD), requestedTime (HH:mm)
+          date: s.requestedDate ?? s.scheduledAt?.split("T")[0] ?? "",
+          time: s.requestedTime ?? (s.scheduledAt ? new Date(s.scheduledAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : ""),
+          // Backend field: durationMin (not durationMins)
+          duration: (s.durationMin ?? s.durationMins ?? 30) as 30 | 60,
+          status: (s.status === "declined" ? "cancelled" : s.status) as SessionStatus,
+          facultyName: typeof s.facultyId === "object" ? s.facultyId?.fullName ?? "Faculty" : "Faculty",
+          meetLink: s.meetLink,
+          // Backend field: proposedDate + proposedTime (not proposedAlternativeAt)
+          proposedDate: s.proposedDate ?? s.proposedAlternativeAt?.split("T")[0],
+          proposedTime: s.proposedTime ?? (s.proposedAlternativeAt
+            ? new Date(s.proposedAlternativeAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+            : undefined),
+        }));
+        if (mapped.length > 0) setSessions(mapped);
+        setIsLoading(false);
+      }).catch(() => { setIsLoading(false); })
+    ).catch(() => { setIsLoading(false); });
+  }, []);
 
-  const handleAcceptProposal = (id: string) =>
-    setSessions((prev) => prev.map((s) => s.id === id ? {
-      ...s, status: "confirmed",
-      date: s.proposedDate ?? s.date, time: s.proposedTime ?? s.time,
-      meetLink: `https://meet.jit.si/NST-PlacePrep-${id}-${Math.random().toString(36).slice(2, 6)}`,
-    } : s));
+  const handleBook = async (data: { topic: string; notes: string; date: string; time: string; duration: 30 | 60; facultyId: string; facultyName: string }) => {
+    const optimisticId = `s${Date.now()}`;
+    const optimistic: Session = {
+      id: optimisticId,
+      topic: data.topic,
+      notes: data.notes,
+      date: data.date,
+      time: data.time,
+      duration: data.duration,
+      status: "pending",
+      facultyName: data.facultyName,
+    };
+    setSessions((prev) => [optimistic, ...prev]);
+    try {
+      const res = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          facultyId: data.facultyId,
+          topic: data.topic,
+          notes: data.notes || undefined,
+          requestedDate: data.date,          // YYYY-MM-DD ✓
+          requestedTime: data.time,          // HH:mm ✓
+          durationMin: data.duration,        // 30 | 60 ✓
+        }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const s = json.data;
+        setSessions((prev) => prev.map((x) => x.id === optimisticId ? {
+          ...x,
+          id: s._id ?? optimisticId,
+          status: "pending",
+        } : x));
+        toast.success("Session request sent! Faculty will confirm shortly.");
+      } else {
+        const errJson = await res.json().catch(() => ({}));
+        setSessions((prev) => prev.filter((x) => x.id !== optimisticId));
+        const fieldErrors = errJson?.error?.details;
+        const msg = fieldErrors
+          ? Object.values(fieldErrors).flat().join(" ")
+          : errJson?.error?.message || "Failed to book session.";
+        toast.error(msg);
+      }
+    } catch {
+      setSessions((prev) => prev.filter((x) => x.id !== optimisticId));
+      toast.error("Network error. Please try again.");
+    }
+  };
+
+
+  const handleAcceptProposal = (id: string) => {
+    import("@/lib/hooks").then(({ updateSessionStatus }) => {
+      // Optimistic update — do NOT generate fake meetLink client-side;
+      // the real link comes from the backend/faculty
+      setSessions((prev) => prev.map((s) => s.id === id ? {
+        ...s, status: "confirmed",
+        date: s.proposedDate ?? s.date, time: s.proposedTime ?? s.time,
+        // meetLink intentionally left as-is (undefined until faculty provides it)
+      } : s));
+      
+      updateSessionStatus(id, 'accept_proposal')
+        .then(() => toast.success("Session confirmed! Faculty will share the meet link."))
+        .catch((err) => {
+          toast.error(err?.message || "Failed to confirm session.");
+          // Revert on error
+          setSessions((prev) => prev.map((s) => s.id === id ? { ...s, status: "proposed" } : s));
+        });
+    });
+  };
 
   const upcoming = sessions.filter((s) => ["pending", "confirmed", "proposed"].includes(s.status));
   const past = sessions.filter((s) => ["completed", "cancelled"].includes(s.status));
+
+  if (isLoading) {
+    return (
+      <div className="max-w-6xl animate-pulse">
+        <div className="mb-5">
+          <div className="h-7 bg-gray-100 rounded w-40 mb-2" />
+          <div className="h-4 bg-gray-100 rounded w-64" />
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-6">
+          <div className="h-72 bg-gray-100 rounded-xl" />
+          <div className="space-y-4">
+            <div className="h-10 bg-gray-100 rounded-lg w-48" />
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="h-28 bg-gray-100 rounded-xl" />
+            ))}
+          </div>
+          <div className="h-64 bg-gray-100 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl">

@@ -1,9 +1,9 @@
 "use client";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
  House, Building2, TrendingUp, Trophy, Send,
- MessageCircle, CalendarDays, Map, Dumbbell,
+ MessageCircle, CalendarDays, Map, Dumbbell, LogOut,
 } from "lucide-react";
 
 import { useNavbar } from "@/lib/navbar-context";
@@ -26,6 +26,17 @@ const connectItems = [
 export default function Sidebar() {
  const pathname = usePathname();
  const { isMobileMenuOpen, setMobileMenuOpen } = useNavbar();
+ const router = useRouter();
+
+ const handleLogout = async () => {
+   try {
+     await fetch('/api/auth/logout', { method: 'POST' });
+   } catch (e) {
+     console.error('Logout failed', e);
+   } finally {
+     window.location.href = '/login';
+   }
+ };
 
  const isActive = (href: string) =>
   pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
@@ -85,7 +96,16 @@ export default function Sidebar() {
      </div>
     </div>
    </nav>
-  </aside>
+    <div className="p-3 border-t border-gray-100">
+     <button
+      onClick={handleLogout}
+      className="flex items-center gap-3 px-3 py-2 w-full text-left rounded-md text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+     >
+      <LogOut className="w-4 h-4 shrink-0" />
+      Logout
+     </button>
+    </div>
+   </aside>
   </>
  );
 }

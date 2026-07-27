@@ -15,8 +15,23 @@ import {
   ChevronRight,
   Sparkles,
 } from "lucide-react";
-import { mockFacultySessionRequests } from "@/lib/mock-data";
-import { FacultySessionRequest, SessionStatus } from "@/lib/mock-data";
+
+import { FacultySessionRequest, SessionStatus } from "@/lib/types";
+import { getSessions, confirmSession, declineSession, proposeAlternative } from "@/lib/api";
+import { toast } from "sonner";
+import { 
+  format, 
+  addMonths, 
+  subMonths, 
+  startOfMonth, 
+  endOfMonth, 
+  startOfWeek, 
+  endOfWeek, 
+  eachDayOfInterval, 
+  isSameMonth, 
+  isSameDay, 
+  isToday 
+} from "date-fns";
 
 const TIME_SLOTS = ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM"];
 
@@ -68,7 +83,7 @@ function fmtDate(d: string) {
 }
 
 export default function RequestsPage() {
-  const [requests, setRequests] = useState<FacultySessionRequest[]>(mockFacultySessionRequests);
+  const [requests, setRequests] = useState<FacultySessionRequest[]>([]);
   const [activeTab, setActiveTab] = useState<"All" | SessionStatus>("All");
   const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
   const [proposingFor, setProposingFor] = useState<string | null>(null);
@@ -76,46 +91,77 @@ export default function RequestsPage() {
   const [proposedTime, setProposedTime] = useState(TIME_SLOTS[0]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
 
   useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 450);
-    return () => clearTimeout(t);
+    getSessions()
+      .then(({ sessions }) => {
+        const mapped: FacultySessionRequest[] = sessions.map((s: any) => {
+          // BUG 2 FIX: SessionBooking model stores requestedDate (YYYY-MM-DD string)
+          // and requestedTime (HH:mm string) — NOT scheduledAt or durationMins.
+          // studentName is denormalized on the document — no need to populate.
+          const studentName = s.studentName ?? (typeof s.studentId === "object" ? s.studentId?.fullName ?? "Student" : "Student");
+          return {
+            id: s._id,
+            studentName,
+            studentInitials: studentName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase(),
+            batch: typeof s.studentId === "object" ? s.studentId?.batch ?? "2024" : "2024",
+            year: typeof s.studentId === "object" ? s.studentId?.year ?? "3rd" : "3rd",
+            branch: typeof s.studentId === "object" ? s.studentId?.branch ?? "CS" : "CS",
+            topic: s.topic,
+            notes: s.notes ?? "",
+            date: s.requestedDate ?? "",         // YYYY-MM-DD ✓
+            time: s.requestedTime ?? "",          // HH:mm ✓
+            duration: s.durationMin ?? 30,        // 30 | 60 ✓
+            status: (s.status === "declined" ? "cancelled" : s.status) as SessionStatus,
+            meetLink: s.meetLink,
+            proposedDate: s.proposedDate,         // stored as plain string in model
+            proposedTime: s.proposedTime,         // stored as plain string in model
+          };
+        });
+        if (mapped.length > 0) setRequests(mapped);
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   }, []);
 
   const handleConfirm = (id: string) => {
     setRequests((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status: "confirmed",
-              meetLink: `https://meet.jit.si/NST-PlacePrep-${id}-${Math.random().toString(36).slice(2, 7)}`,
-            }
-          : r
-      )
+      prev.map((r) => r.id === id ? { ...r, status: "confirmed" } : r)
     );
+    confirmSession(id)
+      .then(() => toast.success("Session confirmed! Jitsi link generated."))
+      .catch((err) => {
+        setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: "pending" } : r));
+        toast.error("Failed to confirm session: " + (err?.message ?? "Unknown error"));
+      });
   };
 
   const handleDecline = (id: string) => {
     setRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: "cancelled" } : r))
     );
+    declineSession(id)
+      .then(() => toast.success("Session declined."))
+      .catch((err) => {
+        setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: "pending" } : r));
+        toast.error("Failed to decline session: " + (err?.message ?? "Unknown error"));
+      });
   };
 
   const handleProposeSubmit = (id: string) => {
-    if (!proposedDate) return;
+    if (!proposedDate || !proposedTime) return;
     setRequests((prev) =>
       prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              status: "proposed",
-              proposedDate,
-              proposedTime,
-            }
-          : r
+        r.id === id ? { ...r, status: "proposed", proposedDate, proposedTime } : r
       )
     );
+    proposeAlternative(id, proposedDate, proposedTime)
+      .then(() => toast.success("Alternative time proposed to student."))
+      .catch((err) => {
+        setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: "pending" } : r));
+        toast.error("Failed to propose alternative: " + (err?.message ?? "Unknown error"));
+      });
     setProposingFor(null);
     setProposedDate("");
     setProposedTime(TIME_SLOTS[0]);
@@ -307,20 +353,66 @@ export default function RequestsPage() {
 
           {/* ── Content View ── */}
           {viewMode === "calendar" ? (
-            <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center shadow-sm max-w-2xl mx-auto mt-4">
-              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-blue-100 shadow-inner">
-                <CalendarDays className="w-8 h-8 text-blue-600" />
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 sm:p-6 shadow-sm mb-12">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-gray-900">{format(currentMonth, 'MMMM yyyy')}</h2>
+                <div className="flex gap-2">
+                  <button onClick={() => setCurrentMonth(subMonths(currentMonth, 1))} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors cursor-pointer">
+                    <ChevronRight className="w-5 h-5 rotate-180" />
+                  </button>
+                  <button onClick={() => setCurrentMonth(addMonths(currentMonth, 1))} className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors cursor-pointer">
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                </div>
               </div>
-              <h3 className="text-lg font-bold text-gray-900">Calendar View Ready</h3>
-              <p className="text-xs text-gray-500 mt-2 max-w-sm mx-auto leading-relaxed">
-                Full calendar synchronization will be available once the backend is connected. Currently displaying {filteredRequests.length} matching requests in list mode.
-              </p>
-              <button 
-                onClick={() => setViewMode("list")} 
-                className="mt-6 px-5 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-colors cursor-pointer"
-              >
-                Switch back to List View
-              </button>
+              
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                  <div key={day} className="text-center text-xs font-bold text-gray-400 py-2 uppercase tracking-wider">{day}</div>
+                ))}
+                
+                {eachDayOfInterval({
+                  start: startOfWeek(startOfMonth(currentMonth)),
+                  end: endOfWeek(endOfMonth(currentMonth))
+                }).map((day, idx) => {
+                  const dayRequests = filteredRequests.filter(req => {
+                    const reqDate = new Date(req.date);
+                    return isSameDay(day, reqDate);
+                  });
+                  
+                  return (
+                    <div 
+                      key={idx} 
+                      className={`min-h-[100px] border rounded-xl p-1.5 sm:p-2 transition-all flex flex-col ${
+                        !isSameMonth(day, currentMonth) 
+                          ? 'bg-gray-50/30 border-transparent opacity-60' 
+                          : isToday(day)
+                            ? 'bg-blue-50/30 border-blue-300 shadow-sm ring-1 ring-blue-100'
+                            : 'bg-white border-gray-100 hover:border-gray-300'
+                      }`}
+                    >
+                      <div className={`text-right text-xs font-bold mb-1.5 ${
+                        isToday(day) ? 'text-blue-600 bg-blue-100 w-6 h-6 flex items-center justify-center rounded-full ml-auto' : 'text-gray-500 pr-1'
+                      }`}>
+                        {format(day, 'd')}
+                      </div>
+                      <div className="space-y-1.5 flex-1 overflow-y-auto max-h-[120px] custom-scrollbar">
+                        {dayRequests.map(req => {
+                          const cfg = STATUS_CFG[req.status];
+                          return (
+                            <div key={req.id} className={`text-[10px] px-1.5 py-1 rounded-md font-medium leading-tight ${cfg.cls} border border-opacity-50`}>
+                              <div className="font-bold flex items-center gap-1 opacity-80 mb-0.5">
+                                <Clock className="w-3 h-3" /> {req.time}
+                              </div>
+                              <div className="truncate">{req.studentName}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ) : (
             <div className="space-y-4">

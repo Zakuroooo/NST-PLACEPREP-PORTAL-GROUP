@@ -2,79 +2,124 @@
 
 import { useState, useMemo } from "react";
 import { Search, Plus, MoreVertical, X, UserPlus, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
-import { mockFaculty } from "@/lib/mock-data";
-import type { Faculty } from "@/lib/types";
+import { toast } from "sonner";
+import useSWR from "swr";
+
+const fetcher = (url: string) => fetch(url).then(r => r.json());
+
+type Faculty = {
+  _id?: string;
+  id?: string | number;
+  fullName?: string;
+  name?: string;
+  initials?: string;
+  subject?: string;
+  stream?: string;
+  email?: string;
+  status?: string;
+  acceptCount?: number;
+  declineCount?: number;
+  satisfactionAvg?: number;
+  responseRate?: number;
+  accepted?: number;
+  declined?: number;
+  satisfaction?: number;
+};
 
 export default function ManageFacultyPage() {
-  const [faculty, setFaculty] = useState<Faculty[]>(mockFaculty);
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
+  const [activeMenuId, setActiveMenuId] = useState<string | number | null>(null);
   const itemsPerPage = 6;
 
-  // Modal states
-  const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
-  const [removingFacultyId, setRemovingFacultyId] = useState<number | null>(null);
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newFaculty, setNewFaculty] = useState({ name: "", email: "", stream: "" });
+  // SWR — real faculty data
+  const { data, mutate, isLoading } = useSWR(
+    `/api/admin/faculty?page=${currentPage}&limit=${itemsPerPage}&search=${searchQuery}`,
+    fetcher
+  );
+  const faculty: Faculty[] = data?.data?.faculty ?? data?.faculty ?? [];
+  const total: number = data?.data?.total ?? data?.total ?? 0;
+  const totalPages = Math.ceil(total / itemsPerPage);
 
-  const filtered = useMemo(() => {
+  // Local filter on fetched page
+  const paginated = useMemo(() => {
     return faculty.filter(
       (f) =>
-        f.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (f.stream || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        f.email.toLowerCase().includes(searchQuery.toLowerCase())
+        (f.fullName ?? f.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (f.email ?? '').toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [faculty, searchQuery]);
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginated = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filtered.slice(start, start + itemsPerPage);
-  }, [filtered, currentPage]);
+  // Modal states
+  const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
+  const [removingFacultyId, setRemovingFacultyId] = useState<string | number | null>(null);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newFaculty, setNewFaculty] = useState({ name: '', email: '', stream: '' });
+  const [saving, setSaving] = useState(false);
 
   const handleEditChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     if (!editingFaculty) return;
     setEditingFaculty({ ...editingFaculty, [e.target.name]: e.target.value });
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingFaculty) return;
-    setFaculty(faculty.map((f) => (f.id === editingFaculty.id ? editingFaculty : f)));
-    setEditingFaculty(null);
-  };
-
-  const confirmRemove = () => {
-    if (removingFacultyId !== null) {
-      setFaculty(faculty.filter((f) => f.id !== removingFacultyId));
-      setRemovingFacultyId(null);
-      if (paginated.length === 1 && currentPage > 1) setCurrentPage(currentPage - 1);
+    const id = editingFaculty._id ?? editingFaculty.id;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/faculty/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fullName: editingFaculty.fullName ?? editingFaculty.name,
+          subject: editingFaculty.subject,
+          stream: editingFaculty.stream,
+          status: editingFaculty.status,
+        }),
+      });
+      if (!res.ok) throw new Error('Update failed');
+      toast.success('Faculty updated.');
+      mutate();
+    } catch {
+      toast.error('Could not update faculty.');
+    } finally {
+      setSaving(false);
+      setEditingFaculty(null);
     }
   };
 
-  const submitNewFaculty = () => {
-    const newId = faculty.length > 0 ? Math.max(...faculty.map((f) => f.id)) + 1 : 1;
-    const nameParts = newFaculty.name.replace(/^(Dr\.|Prof\.|Mr\.|Ms\.)\s*/i, "").split(" ").filter(Boolean);
-    const initials = nameParts.length >= 2
-      ? (nameParts[0][0] + nameParts[nameParts.length - 1][0]).toUpperCase()
-      : (nameParts[0]?.[0] || "?").toUpperCase();
+  const confirmRemove = async () => {
+    if (removingFacultyId === null) return;
+    try {
+      const res = await fetch(`/api/admin/faculty/${removingFacultyId}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      toast.success('Faculty removed.');
+      mutate();
+    } catch {
+      toast.error('Could not remove faculty.');
+    } finally {
+      setRemovingFacultyId(null);
+    }
+  };
 
-    const created: Faculty = {
-      id: newId,
-      name: newFaculty.name,
-      initials,
-      subject: newFaculty.stream,
-      accepted: 0,
-      declined: 0,
-      satisfaction: 0,
-      responseRate: 0,
-      status: "INVITE PENDING",
-      email: newFaculty.email,
-      stream: newFaculty.stream,
-    };
-    setFaculty([...faculty, created]);
-    setNewFaculty({ name: "", email: "", stream: "" });
-    setIsAddModalOpen(false);
+  const submitNewFaculty = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch('/api/admin/faculty/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: newFaculty.email, fullName: newFaculty.name, stream: newFaculty.stream }),
+      });
+      if (!res.ok) throw new Error('Invite failed');
+      toast.success(`Invite sent to ${newFaculty.email}`);
+      setNewFaculty({ name: '', email: '', stream: '' });
+      setIsAddModalOpen(false);
+      mutate();
+    } catch {
+      toast.error('Could not send invite.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const statusBadge = (status: string) => {
@@ -122,20 +167,37 @@ export default function ManageFacultyPage() {
 
         {/* Faculty Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {paginated.map((f) => (
+          {isLoading ? (
+            // Skeleton cards — matches faculty card layout
+            Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm animate-pulse">
+                <div className="flex items-center gap-2.5 mb-3">
+                  <div className="w-9 h-9 rounded-full bg-gray-200 shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3.5 w-32 bg-gray-200 rounded" />
+                    <div className="h-3 w-40 bg-gray-100 rounded" />
+                  </div>
+                </div>
+                <div className="space-y-2 mt-2">
+                  <div className="flex justify-between"><div className="h-3 w-12 bg-gray-100 rounded" /><div className="h-3 w-20 bg-gray-100 rounded" /></div>
+                  <div className="flex justify-between"><div className="h-3 w-12 bg-gray-100 rounded" /><div className="h-5 w-16 bg-gray-200 rounded-full" /></div>
+                </div>
+              </div>
+            ))
+          ) : paginated.map((f) => (
             <div
-              key={f.id}
+              key={f._id ?? String(f.id)}
               className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow relative"
             >
               {/* Actions */}
               <div className="absolute top-4 right-4">
                 <button
-                  onClick={() => setActiveMenuId(activeMenuId === f.id ? null : f.id)}
+                  onClick={() => { const id = String(f._id ?? f.id ?? ''); setActiveMenuId(activeMenuId === id ? null : id); }}
                   className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
                 >
                   <MoreVertical className="w-4 h-4" />
                 </button>
-                {activeMenuId === f.id && (
+                {activeMenuId === (f._id ?? f.id) && (
                   <div className="absolute right-0 top-8 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-36 z-10">
                     <button
                       onClick={() => { setEditingFaculty(f); setActiveMenuId(null); }}
@@ -144,7 +206,7 @@ export default function ManageFacultyPage() {
                       <Pencil className="w-3.5 h-3.5" /> Edit
                     </button>
                     <button
-                      onClick={() => { setRemovingFacultyId(f.id); setActiveMenuId(null); }}
+                      onClick={() => { setRemovingFacultyId(f._id ?? f.id ?? null); setActiveMenuId(null); }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" /> Remove
@@ -159,7 +221,7 @@ export default function ManageFacultyPage() {
                   {f.initials}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{f.name}</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">{f.fullName ?? f.name}</p>
                   <p className="text-xs text-gray-500 truncate">{f.email}</p>
                 </div>
               </div>
@@ -171,7 +233,7 @@ export default function ManageFacultyPage() {
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400 font-medium">Status</span>
-                  {statusBadge(f.status)}
+                  {statusBadge(f.status ?? '')}
                 </div>
               </div>
             </div>
@@ -188,7 +250,7 @@ export default function ManageFacultyPage() {
         {totalPages > 1 && (
           <div className="flex justify-between items-center">
             <span className="text-xs text-gray-500">
-              Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length}
+            Showing {(currentPage - 1) * itemsPerPage + 1}–{Math.min(currentPage * itemsPerPage, total)} of {total}
             </span>
             <div className="flex items-center gap-1">
               <button
@@ -311,7 +373,7 @@ export default function ManageFacultyPage() {
             </div>
             <h2 className="text-lg font-bold text-gray-900 text-center mb-2">Remove Faculty?</h2>
             <p className="text-sm text-gray-500 text-center mb-6">
-              This action will remove {faculty.find((f) => f.id === removingFacultyId)?.name} from the faculty list. This cannot be undone.
+              This action will remove {"the selected faculty member"} from the faculty list. This cannot be undone.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setRemovingFacultyId(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">

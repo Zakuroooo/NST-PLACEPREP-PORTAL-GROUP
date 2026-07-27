@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { updateProfile, useProfile, useRoadmap } from "@/lib/hooks";
 import {
  User, Settings, BarChart2, Bell,
  Edit2, Flame, RotateCcw, Trash2, AlertTriangle,
@@ -11,7 +12,7 @@ import {
 // ── Types ────────────────────────────────────────────
 type Tab = "overview" | "career" | "performance" | "settings";
 
-// ── Mock Data (replace with backend later) ───────────
+// ── Static reference options (not mock data) ──────────
 const COMPANY_CATEGORIES = ["MAANG", "Product", "Service", "Startup", "BFSI", "Other"] as const;
 type CompanyCategory = typeof COMPANY_CATEGORIES[number];
 
@@ -40,7 +41,7 @@ const SKILL_TOPICS = [
 
 const PREP_WEEKS = [4, 6, 8, 12] as const;
 
-const mockUser = {
+const defaultUser = {
  name: "Pranay Sarkar",
  initials: "PS",
  email: "pranay.sarkar@nst.edu",
@@ -67,6 +68,7 @@ const mockUser = {
   { name: "Amazon",  pct: 70, logo: "https://www.amazon.com/favicon.ico" },
   { name: "Flipkart", pct: 20, logo: "https://www.flipkart.com/favicon.ico" },
  ],
+ avatarUrl: null as string | null,
 };
 
 // ── Reusable Toggle ───────────────────────────────────
@@ -111,18 +113,42 @@ function SkillSlider({ label, value, onChange }: { label: string; value: number;
 }
 
 // ── Tab 1: Overview ───────────────────────────────────
-function OverviewTab({ user, onEdit }: { user: typeof mockUser; onEdit: () => void }) {
+function OverviewTab({ user, onEdit }: { user: any; onEdit: () => void }) {
  const [bio, setBio] = useState(user.bio);
  const [linkedin, setLinkedin] = useState(user.linkedin);
  const [github, setGithub] = useState(user.github);
  const [editing, setEditing] = useState(false);
  const [saved, setSaved] = useState(false);
+ const [isUploading, setIsUploading] = useState(false);
 
- const handleSave = () => {
+ const handleSave = async () => {
   setEditing(false);
-  setSaved(true);
-  setTimeout(() => setSaved(false), 2000);
-  // BACKEND TODO: PUT /api/user/profile
+  try {
+   await updateProfile({ bio, linkedinUrl: linkedin, githubUrl: github });
+   setSaved(true);
+   setTimeout(() => setSaved(false), 2000);
+  } catch (err) {
+   console.error("Failed to update profile", err);
+  }
+ };
+
+ const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  
+  setIsUploading(true);
+  const reader = new FileReader();
+  reader.onloadend = async () => {
+   const base64String = reader.result as string;
+   try {
+    await updateProfile({ avatarUrl: base64String });
+   } catch (err) {
+    console.error("Failed to upload avatar", err);
+   } finally {
+    setIsUploading(false);
+   }
+  };
+  reader.readAsDataURL(file);
  };
 
  return (
@@ -131,17 +157,21 @@ function OverviewTab({ user, onEdit }: { user: typeof mockUser; onEdit: () => vo
    <div className="lg:col-span-1">
     <div className="bg-white border border-gray-200 rounded-md p-4 text-center">
      {/* Avatar */}
-     <div className="relative inline-block mb-4">
-      <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg flex items-center justify-center text-white font-bold text-2xl shadow-lg">
-       {user.initials}
+      <div className="relative inline-block mb-4">
+       <div className="w-24 h-24 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-lg flex items-center justify-center text-white font-bold text-2xl shadow-lg overflow-hidden">
+        {user.avatarUrl ? (
+          <img src={user.avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+        ) : (
+          user.initials
+        )}
+       </div>
+       <label
+        className={`absolute -bottom-1 -right-1 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center shadow-md hover:bg-blue-700 cursor-pointer ${isUploading ? 'opacity-50 pointer-events-none' : ''}`}
+       >
+        <input type="file" className="hidden" accept="image/*" onChange={handleAvatarUpload} />
+        <Edit2 className="w-3.5 h-3.5 text-white" />
+       </label>
       </div>
-      <button
-       className="absolute -bottom-1 -right-1 w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center shadow-md hover:bg-blue-700 "
-       aria-label="Change avatar"
-      >
-       <Edit2 className="w-3.5 h-3.5 text-white" />
-      </button>
-     </div>
 
      <h2 className="font-bold text-gray-900 text-xl">{user.name}</h2>
      <p className="text-sm text-gray-500 mt-0.5">{user.email}</p>
@@ -276,7 +306,7 @@ function OverviewTab({ user, onEdit }: { user: typeof mockUser; onEdit: () => vo
 }
 
 // ── Tab 2: Career Settings ────────────────────────────
-function CareerTab({ user }: { user: typeof mockUser }) {
+function CareerTab({ user }: { user: typeof defaultUser }) {
  const [categories, setCategories] = useState<CompanyCategory[]>(user.categories);
  const [companies, setCompanies] = useState<string[]>(user.targetCompanies);
  const [domains, setDomains] = useState<string[]>(user.domains);
@@ -294,12 +324,21 @@ function CareerTab({ user }: { user: typeof mockUser }) {
  const toggleCompany = (c: string) =>
   setCompanies((prev) => prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]);
 
- const handleSave = () => {
-  setSaved(true);
-  setTimeout(() => setSaved(false), 2500);
-  // BACKEND TODO: PUT /api/user/profile/career
-  // Also write to sessionStorage to sync roadmap
-  sessionStorage.setItem("career_settings", JSON.stringify({ categories, companies, domains, prepWeeks, skills }));
+ const handleSave = async () => {
+  try {
+   await updateProfile({
+    targetCategories: categories,
+    targetCompanySlugs: companies.map(c => c.toLowerCase()),
+    targetDomains: domains,
+    prepWeeksCommitted: prepWeeks,
+    topicSelfRatings: skills,
+   });
+   setSaved(true);
+   setTimeout(() => setSaved(false), 2500);
+   sessionStorage.setItem("career_settings", JSON.stringify({ categories, companies, domains, prepWeeks, skills }));
+  } catch (err) {
+   console.error("Failed to update career settings", err);
+  }
  };
 
  return (
@@ -461,7 +500,7 @@ function CareerTab({ user }: { user: typeof mockUser }) {
 }
 
 // ── Tab 3: Performance ────────────────────────────────
-function PerformanceTab({ user }: { user: typeof mockUser }) {
+function PerformanceTab({ user }: { user: typeof defaultUser }) {
  const total = user.solved.easy + user.solved.medium + user.solved.hard;
 
  const computedBadges: string[] = [];
@@ -654,13 +693,106 @@ function SettingsTab() {
  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+ // Change password form state
+ const [pwForm, setPwForm] = useState({
+  currentPassword: "",
+  newPassword: "",
+  confirmPassword: "",
+ });
+ const [pwLoading, setPwLoading] = useState(false);
+
+ const handleChangePassword = async (e: React.FormEvent) => {
+  e.preventDefault();
+  if (pwForm.newPassword !== pwForm.confirmPassword) {
+   const { toast } = await import("sonner");
+   toast.error("New passwords do not match.");
+   return;
+  }
+  if (pwForm.newPassword.length < 8) {
+   const { toast } = await import("sonner");
+   toast.error("New password must be at least 8 characters.");
+   return;
+  }
+  setPwLoading(true);
+  try {
+   const { changePassword } = await import("@/lib/hooks");
+   const { toast } = await import("sonner");
+   await changePassword({
+    currentPassword: pwForm.currentPassword,
+    newPassword: pwForm.newPassword,
+   });
+   toast.success("Password changed successfully.");
+   setPwForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  } catch (err: any) {
+   const { toast } = await import("sonner");
+   toast.error(err?.message ?? "Failed to change password.");
+  } finally {
+   setPwLoading(false);
+  }
+ };
+
+ const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent";
+
  return (
   <div className="space-y-5 max-w-2xl">
    {/* Account Info */}
    <div className="bg-white border border-gray-200 rounded-md p-4">
     <h3 className="font-semibold text-gray-900 mb-2">Account</h3>
     <p className="text-sm text-gray-500">Logged in as <span className="font-medium text-gray-800">pranay.sarkar@nst.edu</span></p>
-    <p className="text-xs text-gray-400 mt-1">Authentication managed via NST SSO — contact IT for changes.</p>
+    <p className="text-xs text-gray-400 mt-1">Contact your admin to change your registered email.</p>
+   </div>
+
+   {/* Change Password */}
+   <div className="bg-white border border-gray-200 rounded-md p-4">
+    <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+     <Shield className="w-4 h-4 text-blue-600" /> Change Password
+    </h3>
+    <form onSubmit={handleChangePassword} className="space-y-3">
+     <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">Current password</label>
+      <input
+       type="password"
+       className={inputCls}
+       placeholder="Enter current password"
+       value={pwForm.currentPassword}
+       onChange={(e) => setPwForm((p) => ({ ...p, currentPassword: e.target.value }))}
+       required
+       autoComplete="current-password"
+      />
+     </div>
+     <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">New password</label>
+      <input
+       type="password"
+       className={inputCls}
+       placeholder="At least 8 characters"
+       value={pwForm.newPassword}
+       onChange={(e) => setPwForm((p) => ({ ...p, newPassword: e.target.value }))}
+       required
+       minLength={8}
+       autoComplete="new-password"
+      />
+     </div>
+     <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">Confirm new password</label>
+      <input
+       type="password"
+       className={inputCls}
+       placeholder="Repeat new password"
+       value={pwForm.confirmPassword}
+       onChange={(e) => setPwForm((p) => ({ ...p, confirmPassword: e.target.value }))}
+       required
+       autoComplete="new-password"
+      />
+     </div>
+     <button
+      type="submit"
+      disabled={pwLoading}
+      className="w-full bg-blue-600 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+     >
+      {pwLoading ? "Changing..." : "Change Password"}
+     </button>
+    </form>
    </div>
 
    {/* Danger Zone */}
@@ -671,40 +803,62 @@ function SettingsTab() {
     </div>
     <p className="text-xs text-gray-500 mb-5">These actions are irreversible. Proceed with extreme caution.</p>
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-     {/* Retake Assessment */}
-     <div>
-      <button
-       onClick={() => setShowResetConfirm(true)}
-       className="w-full border border-red-300 text-red-600 text-sm font-medium py-3 rounded-lg hover:bg-red-100 flex items-center justify-center gap-2"
-      >
-       <RotateCcw className="w-4 h-4" /> Retake Onboarding
-      </button>
-      {showResetConfirm && (
-       <div className="mt-2 p-3 bg-white border border-red-300 rounded-lg text-xs text-gray-600">
-        This will clear your skill ratings and restart onboarding.{" "}
-        <button className="text-red-600 font-semibold underline">Confirm</button>{" "}
-        ·{" "}
-        <button onClick={() => setShowResetConfirm(false)} className="text-gray-500 underline">Cancel</button>
-       </div>
-      )}
-     </div>
-     {/* Reset Roadmap */}
-     <div>
-      <button
-       onClick={() => setShowDeleteConfirm(true)}
-       className="w-full bg-red-600 text-white text-sm font-medium py-3 rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
-      >
-       <Trash2 className="w-4 h-4" /> Reset Roadmap Progress
-      </button>
-      {showDeleteConfirm && (
-       <div className="mt-2 p-3 bg-white border border-red-300 rounded-lg text-xs text-gray-600">
-        All roadmap progress will be permanently deleted.{" "}
-        <button className="text-red-600 font-semibold underline">Confirm Reset</button>{" "}
-        ·{" "}
-        <button onClick={() => setShowDeleteConfirm(false)} className="text-gray-500 underline">Cancel</button>
-       </div>
-      )}
-     </div>
+      {/* Retake Assessment */}
+      <div>
+       <button
+        onClick={() => setShowResetConfirm(true)}
+        className="w-full border border-red-300 text-red-600 text-sm font-medium py-3 rounded-lg hover:bg-red-100 flex items-center justify-center gap-2"
+       >
+        <RotateCcw className="w-4 h-4" /> Retake Onboarding
+       </button>
+       {showResetConfirm && (
+        <div className="mt-2 p-3 bg-white border border-red-300 rounded-lg text-xs text-gray-600">
+         This will clear your skill ratings and restart onboarding.{" "}
+         <button 
+          onClick={async () => {
+           try {
+            const { resetOnboarding } = await import("@/lib/hooks");
+            await resetOnboarding();
+            window.location.href = "/onboarding";
+           } catch (e) { console.error(e); }
+          }}
+          className="text-red-600 font-semibold underline"
+         >
+          Confirm
+         </button>{" "}
+         ·{" "}
+         <button onClick={() => setShowResetConfirm(false)} className="text-gray-500 underline">Cancel</button>
+        </div>
+       )}
+      </div>
+      {/* Reset Roadmap */}
+      <div>
+       <button
+        onClick={() => setShowDeleteConfirm(true)}
+        className="w-full bg-red-600 text-white text-sm font-medium py-3 rounded-lg hover:bg-red-700 flex items-center justify-center gap-2"
+       >
+        <Trash2 className="w-4 h-4" /> Reset Roadmap Progress
+       </button>
+       {showDeleteConfirm && (
+        <div className="mt-2 p-3 bg-white border border-red-300 rounded-lg text-xs text-gray-600">
+         All roadmap progress will be permanently deleted.{" "}
+         <button 
+          onClick={async () => {
+           try {
+            const { resetRoadmap } = await import("@/lib/hooks");
+            await resetRoadmap();
+            window.location.reload();
+           } catch (e) { console.error(e); }
+          }}
+          className="text-red-600 font-semibold underline"
+         >
+          Confirm Reset
+         </button>{" "}
+         ·{" "}
+         <button onClick={() => setShowDeleteConfirm(false)} className="text-gray-500 underline">Cancel</button>
+        </div>
+       )}
+      </div>
     </div>
    </div>
   </div>
@@ -722,6 +876,83 @@ export default function ProfilePage() {
   { id: "performance", label: "Performance",    icon: BarChart2 },
   { id: "settings",   label: "Settings", icon: Settings },
  ];
+
+ // ── Real user data from backend ──────────────────────
+ const { data: rawProfile, isLoading: profileLoading } = useProfile();
+ const { data: roadmaps, isLoading: roadmapsLoading } = useRoadmap();
+
+ // Merge real data over defaults — real fields take precedence
+ const user = {
+  ...defaultUser,
+  ...(rawProfile ? {
+   name:   rawProfile.fullName   ?? defaultUser.name,
+   email:  rawProfile.email     ?? defaultUser.email,
+   roll:   rawProfile.studentId  ?? defaultUser.roll,
+   branch:  rawProfile.branch    ?? defaultUser.branch,
+   batch:  rawProfile.batch     ?? defaultUser.batch,
+   bio:   rawProfile.bio      ?? defaultUser.bio,
+   linkedin: rawProfile.linkedinUrl ?? defaultUser.linkedin,
+   github:  rawProfile.githubUrl  ?? defaultUser.github,
+   xp:    rawProfile.xpTotal    ?? defaultUser.xp,
+   rank:   rawProfile.rank      ?? defaultUser.rank,
+   streak:  rawProfile.currentStreakDays ?? defaultUser.streak,
+   solved:  rawProfile.solved    ?? defaultUser.solved,
+   avatarUrl: rawProfile.avatarUrl ?? defaultUser.avatarUrl,
+   categories: rawProfile.targetCategories?.length > 0 ? rawProfile.targetCategories : defaultUser.categories,
+   targetCompanies: rawProfile.targetCompanySlugs?.length > 0 ? rawProfile.targetCompanySlugs.map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)) : defaultUser.targetCompanies,
+   domains: rawProfile.targetDomains?.length > 0 ? rawProfile.targetDomains : defaultUser.domains,
+   prepWeeks: rawProfile.prepWeeksCommitted ?? defaultUser.prepWeeks,
+   skillRatings: (rawProfile.topicSelfRatings && Object.keys(rawProfile.topicSelfRatings).length > 0) ? rawProfile.topicSelfRatings : defaultUser.skillRatings,
+  } : {}),
+  ...(roadmaps ? {
+   companyReadiness: roadmaps.map((r: any) => {
+    const slug = (r.companySlug || "").toLowerCase();
+    const fallbackLogos: Record<string, string> = {
+      google: "https://lh3.googleusercontent.com/aida-public/AB6AXuAL63YaQlCTo09Zku1cqyIzG3xEfrukR1_1YSdNH_fIn7sACmgE3gMisae0jNWnL0JspExkSlRVTEn2HMKGIqxn85PUIKwxBKN8PIULnXETMPCZ3kiSGLD3HcvmPl4ZTcxGe8HX8znSZPig8KoQPRjH7uk063p0IthnhZFKqsEXuZZbCZza_UjwhEBmarO-o6dTaP-w2tbIEds4hw0OKzoBlncRUzUs1J_7hawmfRX6tGd4NntS9WbWxKn94uAsOHqBgTSK4AnYHBhf",
+      amazon: "https://lh3.googleusercontent.com/aida-public/AB6AXuCVGzGyzCRo-X8CIdRm1Aatp6lKupjl_G42KpNqwN5zGBZYFUckrUJ17QtrE4Dfgr4ma_wSEZGZWCY7mdk9QJ0VdFF0ONtcf9_iQW6bJ_s1UhlKZsKGPf4omDhc9dqKCR6m_iRD55aytexKO28l7quQXn_n1dxjJz1xdA8oWjMtfX9PD2uMdTCY5kpBQaRj7ni1lJnOOy2o1hn5DLo4VqT4Fij8WuIa61zMPXxkFMJaPNjPU4pxcrhhuq-9IZbksafPxtvW73ZZfu63",
+      microsoft: "https://lh3.googleusercontent.com/aida-public/AB6AXuDhuXLkHZDPcAy4XvMJPw67imDyTAjmHdup2A9VGo3-SRjKRfu_LOT4Iu7ZE8UtCS8alFYSfPYPemKC2iKUDzKFaF9UhAcyfMfNKlqXu51iUwdCu3yI8kpFeuCsqfyFapD9wJiP3KA_nd02x1I-6FgNYU9DJuT-3lX0OXstdNIGrZI8yxa9klG0shaBqrBUtHHZwI5hnOr_Ii2XWyquuKQDDZc-OWY3NBQ00ctZeG1-mboNBLU_r71miQbay8cIMfuG-mOwCjOOrzgG",
+      oracle: "https://lh3.googleusercontent.com/aida-public/AB6AXuBt--Bjh49LYHRDqjL-sGCT5qd5lGsNgmCPazwoRF50sqWcFZYzOCwddHULAy0oVZ-UqkPpMZt1b0orruHo7HKjB2d23i5n4wEN_QpRDgUNRoS21qLVtOiraT9qQffLakfduOiyK18liwk04Qdg6uyKocz4Q_ujX9gA-AgBAeXMOmiWDcRDI87XWSHJCDCgHI7GpqfXQA5meH5HaxFU0YaWxYONZZmKSPpJlIu0GqYVfOujjdy-mGD8-DoP9qrSz7w887D2Sy6DDkBC",
+      "goldman-sachs": "https://lh3.googleusercontent.com/aida-public/AB6AXuDdcYKnUW5FRfN85A6hcvfcQc4YWouCSzoIAHEXhesOXOl5lBcmldkCmnI5E8AZ6keWKUVO_VvARuVV-5VfLSnljZfksDSx1ODaI6Diuik2ZhzRBlZ5TyHWJP8dcOl_d6oHMKDtcmfh6vyry8FUrSEzjfIkC4m27wq8eGPJhyNIDH1uG98va-z_rkEd3UXd6AgtUvZHOR1VymVKgYhW04Ci4pLqJFAIADg58zfR_O7BZF9o6LW_yxuUjGTJRvAGOtIvrAHmQwzzHHW9",
+      uber: "https://lh3.googleusercontent.com/aida-public/AB6AXuC_9GpoBxbsK9qtZSMXC828cF1TybC934juVeq1JZMNymJ8sCTfx3EU9IsvTQ7iCPHVnaXm-Ji0f1kOXZbiL_Qe64l8GA6CP0ncofY_jXfmMOVf6cuylumvNf95IFA7VpUGKo93yS9tKpKtMMEZ-Ed4heMDq7YmD9QDteFo2_-wwlXbGiGgTUE0RLE78OqOuDOLHRLI90GHxnlqcJATDF3-L_EDoZWmZdVZ0EWwyjZyJqwF8lhIQfL0QqI3YELn94SPrUsiHQOZcJJ6",
+      meta: "https://upload.wikimedia.org/wikipedia/commons/7/7b/Meta_Platforms_Inc._logo.svg",
+      apple: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg",
+      netflix: "https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg",
+      flipkart: "https://upload.wikimedia.org/wikipedia/commons/1/18/Flipkart_logo.png",
+      tcs: "https://upload.wikimedia.org/wikipedia/commons/b/b1/Tata_Consultancy_Services_Logo.svg",
+      atlassian: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Atlassian_logo.svg",
+      razorpay: "https://upload.wikimedia.org/wikipedia/commons/8/89/Razorpay_logo.svg"
+    };
+    return {
+      name: r.companyName || r.companySlug,
+      pct: r.pctComplete || 0,
+      logo: r.companyLogoUrl || fallbackLogos[slug] || `https://logo.clearbit.com/${r.companySlug}.com`
+    };
+   })
+  } : {}),
+ };
+
+ if (profileLoading || roadmapsLoading) {
+  return (
+   <div className="max-w-5xl animate-pulse">
+    <div className="mb-6">
+     <div className="h-8 bg-gray-100 rounded w-32 mb-2" />
+     <div className="h-4 bg-gray-100 rounded w-64" />
+    </div>
+    {/* Tab bar skeleton */}
+    <div className="flex gap-1 bg-gray-100 rounded-md p-1 mb-6 w-fit">
+     {[...Array(4)].map((_, i) => <div key={i} className="h-9 w-28 bg-gray-200 rounded-lg" />)}
+    </div>
+    {/* Content area skeleton */}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+     <div className="h-64 bg-gray-100 rounded-xl" />
+     <div className="lg:col-span-2 space-y-4">
+      <div className="h-40 bg-gray-100 rounded-xl" />
+      <div className="h-48 bg-gray-100 rounded-xl" />
+     </div>
+    </div>
+   </div>
+  );
+ }
 
  return (
   <div className="max-w-5xl">
@@ -750,9 +981,9 @@ export default function ProfilePage() {
    </div>
 
    {/* Tab Content */}
-   {activeTab === "overview"  && <OverviewTab  user={mockUser} onEdit={() => setActiveTab("career")} />}
-   {activeTab === "career"   && <CareerTab   user={mockUser} />}
-   {activeTab === "performance" && <PerformanceTab user={mockUser} />}
+   {activeTab === "overview"  && <OverviewTab  user={user} onEdit={() => setActiveTab("career")} />}
+   {activeTab === "career"   && <CareerTab   user={user} />}
+   {activeTab === "performance" && <PerformanceTab user={user} />}
    {activeTab === "settings"  && <SettingsTab />}
   </div>
  );

@@ -1,28 +1,74 @@
+"use client";
+import { useState, useEffect } from "react";
 import { TrendingUp, Zap, Medal, ChevronDown, Search, Trophy } from "lucide-react";
 import Link from "next/link";
 
-const leaders = [
-  { rank: 1,   initials: "MC", name: "Michael Chen",       xp: 18900, change: "—",   time: "5 mins ago",  isYou: false },
-  { rank: 2,   initials: "SJ", name: "Sarah Jenkins",      xp: 14250, change: "—",   time: "2 hrs ago",   isYou: false },
-  { rank: 3,   initials: "ED", name: "Emily Davis",        xp: 13800, change: "—",   time: "1 day ago",   isYou: false },
-  { rank: 4,   initials: "DK", name: "David Kim",          xp: 12450, change: "↑ 2", time: "2 hrs ago",   isYou: false },
-  { rank: 5,   initials: "AJ", name: "Alex Johnson",       xp: 11920, change: "— 0", time: "5 mins ago",  isYou: true  },
-  { rank: 6,   initials: "RJ", name: "Rachel Jones",       xp: 11100, change: "↓ 1", time: "1 day ago",   isYou: false },
-  { rank: 7,   initials: "MG", name: "Maria Garcia",       xp: 10850, change: "↑ 5", time: "3 hrs ago",   isYou: false },
-];
+interface LeaderEntry {
+  rank: number;
+  name: string;
+  initials: string;
+  xp: number;
+  change: string;
+  time: string;
+  isYou: boolean;
+}
 
-const me = leaders.find((u) => u.isYou)!;
-const top3 = leaders.slice(0, 3);
-const rest = leaders.slice(3);
+function getInitials(name: string) {
+  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+}
 
 export default function LeaderboardPage() {
+  const [leaders, setLeaders] = useState<LeaderEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [period, setPeriod] = useState<"alltime" | "monthly">("alltime");
+
+  useEffect(() => {
+    setIsLoading(true);
+    fetch(`/api/leaderboard?period=${period}`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((json) => {
+        const raw: any[] = json?.data ?? json?.leaderboard ?? json ?? [];
+        const mapped: LeaderEntry[] = Array.isArray(raw)
+          ? raw.map((u: any, i: number) => ({
+              rank:     u.rank    ?? u.leaderboardRank ?? i + 1,
+              name:     u.studentName ?? u.name    ?? u.fullName        ?? "Student",
+              initials: u.initials ?? getInitials(u.studentName ?? u.name ?? u.fullName ?? "ST"),
+              xp:       u.xp     ?? u.xpTotal         ?? 0,
+              change:   u.change  ?? "—",
+              time:     u.lastActivity
+                ? new Date(u.lastActivity).toLocaleDateString("en-IN", { month: "short", day: "numeric" })
+                : "—",
+              isYou:    u.isCurrentUser ?? u.isYou ?? false,
+            }))
+          : [];
+        setLeaders(mapped);
+      })
+      .catch(() => setLeaders([]))
+      .finally(() => setIsLoading(false));
+  }, [period]);
+
+  const filtered = leaders.filter((u) =>
+    u.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const me = leaders.find((u) => u.isYou);
+  const top3 = filtered.slice(0, 3);
+  const rest = filtered.slice(3);
+
+  const podiumColors = [
+    { bg: "bg-indigo-600", border: "border-indigo-200", badge: "bg-indigo-700", medal: "text-indigo-500" },
+    { bg: "bg-blue-300",   border: "border-blue-200",   badge: "bg-blue-600",   medal: "text-blue-400"   },
+    { bg: "bg-sky-400",    border: "border-sky-100",    badge: "bg-sky-500",    medal: "text-sky-500"    },
+  ];
+
   return (
     <div>
       {/* Hero Banner */}
       <div className="rounded-2xl overflow-hidden mb-6" style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 50%, #2563eb 100%)" }}>
         <div className="p-8 text-center">
           <div className="inline-block border border-white/30 text-white text-xs font-semibold px-4 py-1.5 rounded-full mb-4 bg-white/10">
-            JUNE 2026 CONTEST
+            LIVE RANKINGS
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">PlacePrep Leaderboard</h1>
           <p className="text-blue-200 text-sm max-w-lg mx-auto">
@@ -32,51 +78,53 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* My Standing — always visible at top */}
-      <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-4">
-        
-        {/* Top row on mobile / Left section on desktop */}
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="text-indigo-700 text-xs font-bold uppercase tracking-wide shrink-0">Your Rank</div>
-          <div className="w-px h-6 bg-indigo-200 shrink-0 hidden sm:block" />
-          <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
-            {me.initials}
+      {/* My Standing */}
+      {me && (
+        <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-6 flex flex-col sm:flex-row sm:items-center gap-4">
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="text-indigo-700 text-xs font-bold uppercase tracking-wide shrink-0">Your Rank</div>
+            <div className="w-px h-6 bg-indigo-200 shrink-0 hidden sm:block" />
+            <div className="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-bold shrink-0">
+              {me.initials}
+            </div>
+            <div className="flex-1 sm:hidden flex flex-col items-end">
+              <div className="text-2xl font-bold text-indigo-700 leading-none">#{me.rank}</div>
+              <div className="text-[10px] text-gray-500 mt-1">{me.change}</div>
+            </div>
           </div>
-          {/* Rank shows here on mobile so it's top right */}
-          <div className="flex-1 sm:hidden flex flex-col items-end">
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-gray-900 text-sm">{me.name} <span className="text-indigo-600 font-bold text-xs ml-1">(You)</span></div>
+            <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+              <Zap className="w-3.5 h-3.5 fill-indigo-500 text-indigo-500" />
+              {me.xp.toLocaleString()} XP &nbsp;·&nbsp; {me.time}
+            </div>
+          </div>
+          <div className="hidden sm:block text-right shrink-0">
             <div className="text-2xl font-bold text-indigo-700 leading-none">#{me.rank}</div>
-            <div className="text-[10px] text-gray-500 mt-1">{me.change}</div>
+            <div className="text-xs text-gray-500 mt-1">{me.change}</div>
           </div>
+          <Link href="/practice" className="w-full sm:w-auto bg-indigo-600 text-white text-center text-sm font-semibold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shrink-0">
+            Improve Rank
+          </Link>
         </div>
-
-        {/* Center section */}
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-gray-900 text-sm">{me.name} <span className="text-indigo-600 font-bold text-xs ml-1">(You)</span></div>
-          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-            <Zap className="w-3.5 h-3.5 fill-indigo-500 text-indigo-500" />
-            {me.xp.toLocaleString()} XP &nbsp;·&nbsp; {me.time}
-          </div>
-        </div>
-
-        {/* Right section on desktop */}
-        <div className="hidden sm:block text-right shrink-0">
-          <div className="text-2xl font-bold text-indigo-700 leading-none">#{me.rank}</div>
-          <div className="text-xs text-gray-500 mt-1">{me.change}</div>
-        </div>
-
-        <Link href="/practice" className="w-full sm:w-auto bg-indigo-600 text-white text-center text-sm font-semibold px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shrink-0">
-          Improve Rank
-        </Link>
-      </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div className="flex gap-2">
-          <button className="bg-gray-900 text-white text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 rounded-lg">All Time</button>
-          <button className="border border-gray-300 text-gray-700 text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-50">Monthly</button>
+          <button
+            onClick={() => setPeriod("alltime")}
+            className={`text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 rounded-lg transition-colors ${period === "alltime" ? "bg-gray-900 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+          >All Time</button>
+          <button
+            onClick={() => setPeriod("monthly")}
+            className={`text-xs sm:text-sm font-medium px-3 sm:px-4 py-2 rounded-lg transition-colors ${period === "monthly" ? "bg-gray-900 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+          >Monthly</button>
         </div>
         <div className="relative w-full sm:w-auto">
           <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Search a student..."
             className="pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white w-full sm:w-56"
           />
@@ -84,95 +132,87 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {/* Podium */}
-      <div className="flex justify-center items-end gap-2 sm:gap-8 mb-8">
-        {/* 2nd */}
-        <div className="text-center flex flex-col items-center pb-4">
-          <Medal className="w-5 h-5 sm:w-7 sm:h-7 text-blue-400 mb-2" />
-          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-300 flex items-center justify-center text-white text-lg sm:text-xl font-bold border-4 border-blue-200">
-            {top3[1].initials}
-          </div>
-          <div className="bg-blue-600 text-white text-[10px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center -mt-3 ml-8 sm:ml-10">2</div>
-          <div className="text-xs sm:text-sm font-medium text-gray-900 mt-2 truncate max-w-[80px] sm:max-w-none">{top3[1].name}</div>
-          <div className="text-[10px] sm:text-xs text-gray-500 flex items-center justify-center gap-1 mt-1"><Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-blue-500 text-blue-500" /> {top3[1].xp.toLocaleString()}</div>
-        </div>
-        {/* 1st */}
-        <div className="text-center flex flex-col items-center mb-4">
-          <Medal className="w-7 h-7 sm:w-9 sm:h-9 text-indigo-500 mb-2" />
-          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xl sm:text-2xl font-bold border-4 border-indigo-200">
-            {top3[0].initials}
-          </div>
-          <div className="bg-indigo-700 text-white text-[10px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center -mt-3 ml-10 sm:ml-12">1</div>
-          <div className="text-sm sm:text-base font-bold text-gray-900 mt-3 truncate max-w-[90px] sm:max-w-none">{top3[0].name}</div>
-          <div className="text-[10px] sm:text-sm text-indigo-600 font-semibold flex items-center justify-center gap-1 mt-1"><Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-indigo-500 text-indigo-500" /> {top3[0].xp.toLocaleString()}</div>
-        </div>
-        {/* 3rd */}
-        <div className="text-center flex flex-col items-center pb-4">
-          <Medal className="w-5 h-5 sm:w-7 sm:h-7 text-sky-500 mb-2" />
-          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-sky-400 flex items-center justify-center text-white text-lg sm:text-xl font-bold border-4 border-sky-100">
-            {top3[2].initials}
-          </div>
-          <div className="bg-sky-500 text-white text-[10px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center -mt-3 ml-8 sm:ml-10">3</div>
-          <div className="text-xs sm:text-sm font-medium text-gray-900 mt-2 truncate max-w-[80px] sm:max-w-none">{top3[2].name}</div>
-          <div className="text-[10px] sm:text-xs text-gray-500 flex items-center justify-center gap-1 mt-1"><Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-sky-500 text-sky-500" /> {top3[2].xp.toLocaleString()}</div>
-        </div>
-      </div>
-
-      {/* CTA */}
-      <div className="bg-blue-600 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-0 mb-6">
-        <div className="flex items-start sm:items-center gap-3">
-          <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
-            <Trophy className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <div className="text-white font-bold text-sm">Your Rank: #5</div>
-            <div className="text-blue-200 text-xs mt-0.5">Increase your XP by completing practice modules and daily challenges.</div>
-          </div>
-        </div>
-        <Link href="/practice" className="bg-white text-blue-900 text-center text-sm font-semibold px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors shrink-0">
-          Go to Practice
-        </Link>
-      </div>
-
-      {/* Full Table */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-        <div className="min-w-[700px]">
-          <div className="grid grid-cols-[80px_100px_1fr_150px_150px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200">
-            {["RANK", "CHANGE", "NAME", "XP THIS MONTH", "LATEST SUBMISSION"].map((h) => (
-              <div key={h} className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</div>
-            ))}
-          </div>
-        {rest.map((u) => (
-          <div
-            key={u.rank}
-            className={`grid grid-cols-[80px_100px_1fr_150px_150px] gap-4 px-5 py-4 border-b border-gray-100 last:border-0 ${
-              u.isYou ? "bg-indigo-50/50 border-indigo-100" : "hover:bg-gray-50"
-            } transition-colors`}
-          >
-            <div className="font-bold text-gray-900">#{u.rank}</div>
-            <div className={`text-sm font-medium ${
-              u.change.startsWith("↑") ? "text-green-600" :
-              u.change.startsWith("↓") ? "text-red-500" : "text-gray-400"
-            }`}>{u.change}</div>
-            <div className="flex items-center gap-2">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${u.isYou ? "bg-blue-600" : "bg-gray-400"}`}>
-                {u.initials}
-              </div>
-              <span className={`text-sm ${u.isYou ? "font-bold text-gray-900" : "text-gray-700"}`}>
-                {u.name}{u.isYou && <span className="text-blue-600 font-bold text-xs ml-1">(You)</span>}
-              </span>
+      {isLoading ? (
+        <div className="text-center py-12 text-gray-400 text-sm">Loading leaderboard...</div>
+      ) : leaders.length === 0 ? (
+        <div className="text-center py-12 text-gray-400 text-sm">No data yet. Be the first to top the board!</div>
+      ) : (
+        <>
+          {/* Podium */}
+          {top3.length >= 3 && (
+            <div className="flex justify-center items-end gap-2 sm:gap-8 mb-8">
+              {[top3[1], top3[0], top3[2]].map((u, pos) => {
+                const order = pos === 0 ? 1 : pos === 1 ? 0 : 2;
+                const c = podiumColors[order];
+                return (
+                  <div key={u.rank} className={`text-center flex flex-col items-center ${order === 0 ? "mb-4" : "pb-4"}`}>
+                    <Medal className={`w-5 h-5 sm:w-7 sm:h-7 ${c.medal} mb-2`} />
+                    <div className={`${order === 0 ? "w-16 h-16 sm:w-20 sm:h-20 text-xl sm:text-2xl" : "w-12 h-12 sm:w-16 sm:h-16 text-lg sm:text-xl"} rounded-full ${c.bg} flex items-center justify-center text-white font-bold border-4 ${c.border}`}>
+                      {u.initials}
+                    </div>
+                    <div className={`${c.badge} text-white text-[10px] sm:text-xs font-bold w-5 h-5 sm:w-6 sm:h-6 rounded-full flex items-center justify-center -mt-3 ml-8 sm:ml-10`}>{u.rank}</div>
+                    <div className="text-xs sm:text-sm font-medium text-gray-900 mt-2 truncate max-w-[80px] sm:max-w-none">{u.name}</div>
+                    <div className="text-[10px] sm:text-xs text-gray-500 flex items-center justify-center gap-1 mt-1">
+                      <Zap className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-blue-500 text-blue-500" /> {u.xp.toLocaleString()}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-            <div className="text-sm font-semibold text-gray-900">{u.xp.toLocaleString()}</div>
-            <div className="text-sm text-gray-500">{u.time}</div>
+          )}
+
+          {/* CTA */}
+          <div className="bg-blue-600 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 sm:gap-0 mb-6">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
+                <Trophy className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <div className="text-white font-bold text-sm">Your Rank: {me ? `#${me.rank}` : "—"}</div>
+                <div className="text-blue-200 text-xs mt-0.5">Increase your XP by completing practice modules and daily challenges.</div>
+              </div>
+            </div>
+            <Link href="/practice" className="bg-white text-blue-900 text-center text-sm font-semibold px-4 py-2 rounded-lg hover:bg-blue-50 transition-colors shrink-0">
+              Go to Practice
+            </Link>
           </div>
-        ))}
-        </div>
-        <div className="flex justify-center py-4 border-t border-gray-100">
-          <button className="border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50">
-            View Top 100 <ChevronDown className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+
+          {/* Full Table */}
+          <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+            <div className="min-w-[700px]">
+              <div className="grid grid-cols-[80px_100px_1fr_150px_150px] gap-4 px-5 py-3 bg-gray-50 border-b border-gray-200">
+                {["RANK", "CHANGE", "NAME", "XP", "LAST ACTIVE"].map((h) => (
+                  <div key={h} className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</div>
+                ))}
+              </div>
+              {rest.map((u) => (
+                <div
+                  key={u.rank}
+                  className={`grid grid-cols-[80px_100px_1fr_150px_150px] gap-4 px-5 py-4 border-b border-gray-100 last:border-0 ${u.isYou ? "bg-indigo-50/50 border-indigo-100" : "hover:bg-gray-50"} transition-colors`}
+                >
+                  <div className="font-bold text-gray-900">#{u.rank}</div>
+                  <div className={`text-sm font-medium ${u.change.startsWith("↑") ? "text-green-600" : u.change.startsWith("↓") ? "text-red-500" : "text-gray-400"}`}>{u.change}</div>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold ${u.isYou ? "bg-blue-600" : "bg-gray-400"}`}>
+                      {u.initials}
+                    </div>
+                    <span className={`text-sm ${u.isYou ? "font-bold text-gray-900" : "text-gray-700"}`}>
+                      {u.name}{u.isYou && <span className="text-blue-600 font-bold text-xs ml-1">(You)</span>}
+                    </span>
+                  </div>
+                  <div className="text-sm font-semibold text-gray-900">{u.xp.toLocaleString()}</div>
+                  <div className="text-sm text-gray-500">{u.time}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-center py-4 border-t border-gray-100">
+              <button className="border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50">
+                View Top 100 <ChevronDown className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

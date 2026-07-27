@@ -1,50 +1,62 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Search, ChevronRight, Plus, Check, XCircle } from "lucide-react";
-import { companiesList, getUserRoadmapCompanies } from "@/lib/mock-data";
+import { useCompanies, useRoadmap } from "@/lib/hooks";
 import AddToRoadmapModal from "@/components/modals/AddToRoadmapModal";
 
 const FILTERS = ["All", "FAANG", "Indian Product", "Indian Startup", "Service"] as const;
 type Filter = typeof FILTERS[number];
 
-const filterMap: Record<Filter, string[]> = {
-  "All":             [],
-  "FAANG":           ["FAANG"],
-  "Indian Product":  ["Indian Product"],
-  "Indian Startup":  ["Indian Startup"],
-  "Service":         ["Service"],
+type Company = {
+  _id?: string;
+  slug: string;
+  name: string;
+  category?: string;
+  type?: string;
+  hiringStatus?: string;
+  questionCount?: number;
+  questions?: number;
+  topTopic?: string;
 };
 
 export default function CompaniesPage() {
   const [activeFilter, setActiveFilter] = useState<Filter>("All");
   const [search, setSearch] = useState("");
-  const [roadmapSlugs, setRoadmapSlugs] = useState<string[]>([]);
-  const [modalCompany, setModalCompany] = useState<typeof companiesList[number] | null>(null);
+  const [modalCompany, setModalCompany] = useState<Company | null>(null);
   const [showLimitToast, setShowLimitToast] = useState(false);
 
-  // Read which companies are already in roadmap using the dynamic helper
-  useEffect(() => {
-    // Need timeout to let component mount since mock-data accesses sessionStorage
-    setTimeout(() => {
-      const activeRoadmaps = getUserRoadmapCompanies();
-      setRoadmapSlugs(activeRoadmaps.map((r) => r.slug));
-    }, 0);
-  }, []);
+  // Real API data
+  const { data: companiesData, isLoading } = useCompanies();
+  const { data: roadmapData } = useRoadmap();
 
-  const filtered = companiesList.filter((c) => {
-    const matchesFilter =
-      activeFilter === "All" || filterMap[activeFilter].includes(c.type);
-    const matchesSearch =
-      !search.trim() || c.name.toLowerCase().includes(search.toLowerCase());
+  // companiesData is already the array of companies because useCompanies unwraps it
+  const allCompanies: Company[] = Array.isArray(companiesData) 
+    ? companiesData 
+    : (companiesData?.data?.companies ?? companiesData?.companies ?? []);
+
+  const roadmapDataUnwrapped = Array.isArray(roadmapData) ? roadmapData : (roadmapData?.data?.roadmaps ?? roadmapData?.roadmaps ?? []);
+  const roadmapSlugs: string[] = roadmapDataUnwrapped.map(
+    (r: any) => r.companySlug
+  );
+
+  // Category mapping from API → filter
+  const categoryMatch = (co: Company): string[] => {
+    const cat = (co.category ?? co.type ?? "").toLowerCase();
+    if (cat.includes("faang") || cat === "maang") return ["FAANG"];
+    if (cat.includes("product")) return ["Indian Product"];
+    if (cat.includes("startup")) return ["Indian Startup"];
+    if (cat.includes("service")) return ["Service"];
+    return [];
+  };
+
+  const filtered = allCompanies.filter((c) => {
+    const matchesFilter = activeFilter === "All" || categoryMatch(c).includes(activeFilter);
+    const matchesSearch = !search.trim() || c.name.toLowerCase().includes(search.toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
-  const handleAdded = (slug: string) => {
-    setRoadmapSlugs((prev) => [...prev.filter((s) => s !== slug), slug]);
-  };
-
-  const handleAddClick = (co: typeof companiesList[number], inRoadmap: boolean) => {
+  const handleAddClick = (co: Company, inRoadmap: boolean) => {
     if (inRoadmap) return;
     if (roadmapSlugs.length >= 5) {
       setShowLimitToast(true);
@@ -52,6 +64,10 @@ export default function CompaniesPage() {
       return;
     }
     setModalCompany(co);
+  };
+
+  const handleAdded = () => {
+    // SWR will revalidate roadmap automatically
   };
 
   return (
@@ -90,12 +106,21 @@ export default function CompaniesPage() {
         ))}
       </div>
 
-      {/* Company Grid */}
-      {filtered.length === 0 ? (
-        <div className="text-center py-16 text-gray-400 text-sm">
-          No companies found for &quot;{search}&quot;
+      {/* Loading state */}
+      {isLoading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="bg-white border border-gray-100 rounded-xl p-5 animate-pulse h-40" />
+          ))}
         </div>
-      ) : (
+      )}
+
+      {/* Company Grid */}
+      {!isLoading && filtered.length === 0 ? (
+        <div className="text-center py-16 text-gray-400 text-sm">
+          {search ? `No companies found for "${search}"` : "No companies available yet."}
+        </div>
+      ) : !isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.map((co) => {
             const inRoadmap = roadmapSlugs.includes(co.slug);
@@ -115,7 +140,7 @@ export default function CompaniesPage() {
                   />
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-gray-900 text-sm truncate">{co.name}</div>
-                    <div className="text-xs text-gray-400">{co.type}</div>
+                    <div className="text-xs text-gray-400">{co.category ?? co.type}</div>
                   </div>
                   {inRoadmap && (
                     <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5 shrink-0">
@@ -128,16 +153,15 @@ export default function CompaniesPage() {
                 <div className="flex justify-between text-xs text-gray-500 mb-4">
                   <span>
                     <span className="font-semibold text-gray-900">
-                      {co.questions.toLocaleString()}
+                      {(co.questionCount ?? co.questions ?? 0).toLocaleString()}
                     </span>{" "}
                     questions
                   </span>
-                  <span>Top: {co.topTopic}</span>
+                  {co.topTopic && <span>Top: {co.topTopic}</span>}
                 </div>
 
                 {/* CTAs */}
                 <div className="mt-auto flex gap-2">
-                  {/* Add to Roadmap button */}
                   <button
                     onClick={() => handleAddClick(co, inRoadmap)}
                     disabled={inRoadmap}
@@ -154,7 +178,6 @@ export default function CompaniesPage() {
                     )}
                   </button>
 
-                  {/* View Intel */}
                   <Link
                     href={`/companies/${co.slug}`}
                     className="flex-1 text-center bg-gray-900 text-white text-xs font-semibold py-2 rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center gap-1"
@@ -166,17 +189,17 @@ export default function CompaniesPage() {
             );
           })}
         </div>
-      )}
+      ) : null}
 
       {/* Summary */}
       <p className="text-xs text-gray-400 mt-6 text-center">
-        Showing {filtered.length} of {companiesList.length} companies
+        Showing {filtered.length} of {allCompanies.length} companies
       </p>
 
       {/* Add to Roadmap Modal */}
       {modalCompany && (
         <AddToRoadmapModal
-          company={modalCompany}
+          company={modalCompany as any}
           onClose={() => setModalCompany(null)}
           onAdded={handleAdded}
         />

@@ -5,7 +5,7 @@ import {
   Building2, Briefcase, Server, Rocket, Landmark, MoreHorizontal, CheckCircle,
 } from "lucide-react";
 import Stepper from "@/components/onboarding/Stepper";
-import { CompanyCategory } from "@/lib/mock-data";
+import { type CompanyCategory } from "@/lib/constants";
 
 const categories: { id: CompanyCategory; icon: React.ComponentType<{ className?: string }>; label: string; desc: string }[] = [
   { id: "maang",   icon: Building2,      label: "MAANG / Big Tech",    desc: "Google, Meta, Amazon, Apple, Netflix" },

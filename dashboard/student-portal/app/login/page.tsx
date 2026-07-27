@@ -1,118 +1,213 @@
 "use client";
+
 import { useState } from "react";
-import { useSignIn } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { Loader2, Globe2, UserCheck } from "lucide-react";
+import { Eye, EyeOff, Loader2, GraduationCap, Trophy, BookOpen, Zap } from "lucide-react";
 
-export default function LoginPage() {
-  const { isLoaded, signIn, setActive } = useSignIn();
+const STUDENT_LOGIN_URL =
+  process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || "http://localhost:3000";
+
+export default function StudentLoginPage() {
   const router = useRouter();
-  const [error, setError] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleGoogleSignIn = async () => {
-    if (!isLoaded) return;
+  async function handleLogin(e: React.FormEvent) {
+    e.preventDefault();
     setError("");
     setLoading(true);
+
     try {
-      await signIn.authenticateWithRedirect({
-        strategy: "oauth_google",
-        redirectUrl: "/sso-callback",
-        redirectUrlComplete: "/dashboard",
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
-    } catch (err: unknown) {
-      const e = err as { errors?: { message: string }[] };
-      setError(e?.errors?.[0]?.message ?? "Google sign-in failed. Please try again.");
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.message || "Login failed. Please check your credentials.");
+        return;
+      }
+
+      if (data.data.role !== "student") {
+        setError("This portal is for students only. Please use the correct portal.");
+        return;
+      }
+
+      router.push("/dashboard");
+    } catch {
+      setError("Unable to connect. Please check your internet connection.");
+    } finally {
       setLoading(false);
     }
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Left panel — brand */}
-      <div className="hidden lg:flex flex-col justify-between w-1/2 bg-blue-700 p-12">
-        <div className="flex items-center gap-2">
-          <div className="bg-white/20 rounded px-2 py-1 text-white font-bold text-sm">NST</div>
-          <span className="font-bold text-white text-base">PlacePrep</span>
-        </div>
-        <div>
-          <h1 className="text-4xl font-bold text-white leading-snug mb-4">
-            India&apos;s Interview<br />Intelligence Platform
-          </h1>
-          <p className="text-blue-200 text-base leading-relaxed max-w-sm">
-            Built exclusively for NST students. Practice smarter, track your
-            readiness, and crack your dream company interview.
-          </p>
-        </div>
-        <div className="flex flex-col gap-3">
-          {[
-            { num: "658+", label: "Companies Covered" },
-            { num: "18,000+", label: "Real Interview Questions" },
-            { num: "4–16 Weeks", label: "Custom Roadmaps" },
-          ].map(({ num, label }) => (
-            <div key={label} className="flex items-center gap-3">
-              <div className="text-white font-bold text-base w-20">{num}</div>
-              <div className="text-blue-200 text-sm">{label}</div>
+    <div className="min-h-screen flex bg-[#0a0f1e]">
+      {/* ── Left brand panel ── */}
+      <div className="hidden lg:flex flex-col justify-between w-[45%] relative overflow-hidden p-14">
+        {/* Gradient background */}
+        <div className="absolute inset-0 bg-gradient-to-br from-[#1a1f3e] via-[#0d1a3a] to-[#0a0f1e]" />
+        <div className="absolute top-0 left-0 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
+        <div className="absolute bottom-0 right-0 w-80 h-80 bg-violet-600/15 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
+
+        <div className="relative z-10">
+          <div className="flex items-center gap-2.5">
+            <div className="bg-blue-600 rounded-lg px-2.5 py-1.5 text-white font-bold text-sm tracking-wide">
+              NST
             </div>
-          ))}
+            <span className="font-bold text-white text-lg tracking-tight">PlacePrep</span>
+          </div>
+        </div>
+
+        <div className="relative z-10 space-y-8">
+          <div>
+            <h1 className="text-4xl font-bold text-white leading-tight mb-4">
+              Your Interview
+              <br />
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-violet-400">
+                Intelligence Hub
+              </span>
+            </h1>
+            <p className="text-gray-400 text-base leading-relaxed max-w-xs">
+              Practice smarter with real NST interview data, personalized
+              roadmaps, and direct faculty mentorship.
+            </p>
+          </div>
+
+          <div className="space-y-4">
+            {[
+              { icon: Trophy, label: "658+ Companies", sub: "with verified interview data" },
+              { icon: BookOpen, label: "18,000+ Questions", sub: "sorted by frequency & difficulty" },
+              { icon: Zap, label: "XP & Streak System", sub: "gamified learning that sticks" },
+            ].map(({ icon: Icon, label, sub }) => (
+              <div key={label} className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
+                  <Icon className="w-4 h-4 text-blue-400" />
+                </div>
+                <div>
+                  <div className="text-white text-sm font-semibold">{label}</div>
+                  <div className="text-gray-500 text-xs">{sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="relative z-10">
+          <p className="text-gray-600 text-xs">
+            Newton School of Technology · B.Tech CS & AI
+          </p>
         </div>
       </div>
 
-      {/* Right panel — form */}
-      <div className="flex-1 flex flex-col items-center justify-center px-8">
+      {/* ── Right login panel ── */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         {/* Mobile logo */}
-        <div className="flex items-center gap-2 mb-8 lg:hidden">
-          <div className="bg-blue-700 rounded px-2 py-1 text-white font-bold text-sm">NST</div>
-          <span className="font-bold text-gray-900 text-base">PlacePrep</span>
+        <div className="flex items-center gap-2 mb-10 lg:hidden">
+          <div className="bg-blue-600 rounded-lg px-2.5 py-1.5 text-white font-bold text-sm">NST</div>
+          <span className="font-bold text-white text-lg">PlacePrep</span>
         </div>
 
         <div className="w-full max-w-sm">
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Welcome back</h2>
-          <p className="text-sm text-gray-500 mb-8">Sign in to continue to PlacePrep</p>
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/30 flex items-center justify-center">
+                <GraduationCap className="w-4 h-4 text-blue-400" />
+              </div>
+              <span className="text-xs font-semibold text-blue-400 tracking-widest uppercase">
+                Student Portal
+              </span>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-1.5">Welcome back</h2>
+            <p className="text-gray-500 text-sm">Sign in to continue your prep journey</p>
+          </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg mb-6">
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-sm px-4 py-3 rounded-xl mb-6">
               {error}
             </div>
           )}
 
-          <div id="clerk-captcha" />
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@newtonschool.co"
+                required
+                disabled={loading}
+                className="w-full bg-white/5 border border-white/10 text-white placeholder-gray-600 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all"
+              />
+            </div>
 
-          {/* Google SSO */}
-          <button
-            onClick={handleGoogleSignIn}
-            disabled={loading || !isLoaded}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-800 font-semibold py-3 rounded-xl text-sm hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-          >
-            {loading ? (
-              <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
-            ) : (
-              <Globe2 className="w-4 h-4 text-blue-500" />
-            )}
-            {loading ? "Redirecting..." : "Sign in with Google (NST Email)"}
-          </button>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  disabled={loading}
+                  className="w-full bg-white/5 border border-white/10 text-white placeholder-gray-600 px-4 py-3 pr-11 rounded-xl text-sm focus:outline-none focus:border-blue-500/60 focus:bg-white/8 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
 
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400 font-medium">OR</span>
-            <div className="flex-1 h-px bg-gray-200" />
+            <button
+              type="submit"
+              disabled={loading || !email || !password}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl text-sm transition-all duration-200 flex items-center justify-center gap-2 mt-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Signing in...
+                </>
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </form>
+
+          <div className="mt-8 pt-6 border-t border-white/5">
+            <p className="text-center text-xs text-gray-600">
+              Access restricted to NST students only.
+              <br />
+              Contact your admin if you cannot log in.
+            </p>
           </div>
 
-          {/* Guest Access */}
-          <button
-            type="button"
-            onClick={() => router.push("/onboarding/step1")}
-            className="w-full flex items-center justify-center gap-3 bg-gray-100 border border-gray-200 text-gray-700 font-semibold py-3 rounded-xl text-sm hover:bg-gray-200 transition-colors"
-          >
-            <UserCheck className="w-4 h-4 text-gray-500" />
-            Guest Access (Demo Mode)
-          </button>
-
-          <p className="text-xs text-center text-gray-400 mt-6">
-            Access restricted to NST students only.
-            <br />
-            Use your <span className="font-medium text-gray-600">@newtonschool.co</span> Google account.
-          </p>
+          <div className="mt-6 flex justify-center gap-4 text-xs text-gray-700">
+            <a href={`${STUDENT_LOGIN_URL.replace("3000", "3001")}/login`} className="hover:text-gray-500 transition-colors">
+              Faculty Portal
+            </a>
+            <span>·</span>
+            <a href={`${STUDENT_LOGIN_URL.replace("3000", "3002")}/login`} className="hover:text-gray-500 transition-colors">
+              Admin Portal
+            </a>
+          </div>
         </div>
       </div>
     </div>
