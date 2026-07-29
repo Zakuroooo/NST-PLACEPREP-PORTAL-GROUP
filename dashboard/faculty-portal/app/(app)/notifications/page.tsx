@@ -1,10 +1,10 @@
-// STEP 1: Faculty Notifications — Wired to real API
-// Replaces hardcoded inline array with getNotifications() + markNotificationRead()
+// Faculty Notifications — type-aware deep links + one-way read marking
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Bell, CheckCircle2, MessageCircle, X, RefreshCw, CalendarDays } from "lucide-react";
-import { getNotifications, markNotificationRead, type NotificationData } from "@/lib/api";
+import { getNotifications, markNotificationRead, markAllNotificationsRead, type NotificationData } from "@/lib/api";
 
 function timeAgo(iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -41,16 +41,28 @@ function NotificationIcon({ type }: { type: string }) {
 }
 
 export default function NotificationsPage() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Map notification type to the relevant portal route for deep linking
+  const getNotifLink = (type: string): string => {
+    switch (type) {
+      case 'session': return '/requests';
+      case 'doubt':   return '/doubts';
+      case 'badge':   return '/leaderboard';
+      case 'xp':      return '/leaderboard';
+      default:        return '';
+    }
+  };
 
   const fetchNotifications = () => {
     setIsLoading(true);
     setError(null);
     getNotifications()
       .then((data) => setNotifications(data))
-      .catch(() => setError("Could not load notifications. Please try again."))
+      .catch(() => setError('Could not load notifications. Please try again.'))
       .finally(() => setIsLoading(false));
   };
 
@@ -58,19 +70,27 @@ export default function NotificationsPage() {
     fetchNotifications();
   }, []);
 
-  const handleMarkAllRead = () => {
+  // FIX: Mark-all-read — call the /read-all endpoint, then refresh
+  const handleMarkAllRead = async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    // Fire API calls for each unread (best-effort)
-    notifications
-      .filter((n) => !n.isRead)
-      .forEach((n) => markNotificationRead(n._id).catch(() => {}));
+    try {
+      await markAllNotificationsRead();
+    } catch {
+      // Silently ignore — UI already updated optimistically
+    }
   };
 
-  const handleToggleRead = (id: string) => {
+  // FIX: One-way only — never toggles back to unread. Also deep-links to relevant section.
+  const handleMarkRead = (id: string, type: string) => {
+    // Mark read in UI immediately (optimistic)
     setNotifications((prev) =>
-      prev.map((n) => (n._id === id ? { ...n, isRead: !n.isRead } : n))
+      prev.map((n) => (n._id === id ? { ...n, isRead: true } : n))
     );
+    // Fire API — best effort
     markNotificationRead(id).catch(() => {});
+    // Deep link to relevant section
+    const link = getNotifLink(type);
+    if (link) router.push(link);
   };
 
   const handleDismiss = (id: string, e: React.MouseEvent) => {
@@ -146,7 +166,7 @@ export default function NotificationsPage() {
         {notifications.map((notification) => (
           <div
             key={notification._id}
-            onClick={() => handleToggleRead(notification._id)}
+            onClick={() => handleMarkRead(notification._id, notification.type)}
             className={`p-4 flex gap-4 hover:bg-gray-50 transition-colors cursor-pointer relative group ${
               !notification.isRead ? "bg-blue-50/40" : ""
             }`}

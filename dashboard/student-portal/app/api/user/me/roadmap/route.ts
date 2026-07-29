@@ -73,25 +73,60 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw ApiError.notFound('Company not found');
     }
 
+    // ── Build curriculum weeks from the company's real topic frequency data ──
+    // Each week = one top topic from the company's question pool.
+    // Topics are sorted by questionCount descending so students tackle the
+    // most-tested areas first.
+    const topicFrequency: Array<{ topicName: string; questionCount: number }> =
+      (company as any).topicFrequency ?? [];
+
+    const userWeeks = Math.min(Math.max(Number(preparationWeeks) || 12, 4), 52);
+
+    // Pick the top N topics by question count (N = weeksCommitted)
+    const topTopics = topicFrequency
+      .filter(t => t.questionCount > 0)
+      .sort((a, b) => b.questionCount - a.questionCount)
+      .slice(0, userWeeks);
+
+    // Fallback if company has no topicFrequency yet
+    const DEFAULT_TOPICS = [
+      { topicName: 'Arrays', questionCount: 10 },
+      { topicName: 'Strings', questionCount: 8 },
+      { topicName: 'Dynamic Programming', questionCount: 8 },
+      { topicName: 'Trees', questionCount: 6 },
+      { topicName: 'Graphs', questionCount: 6 },
+      { topicName: 'Greedy', questionCount: 5 },
+      { topicName: 'Binary Search', questionCount: 5 },
+      { topicName: 'Hash Tables', questionCount: 4 },
+      { topicName: 'Sorting', questionCount: 4 },
+      { topicName: 'Two Pointers', questionCount: 4 },
+      { topicName: 'Stack', questionCount: 3 },
+      { topicName: 'System Design', questionCount: 3 },
+    ];
+
+    const weekTopics = topTopics.length >= 2 ? topTopics : DEFAULT_TOPICS.slice(0, userWeeks);
+
+    const weeks = weekTopics.map((t, i) => ({
+      weekNumber: i + 1,
+      topicLabel: t.topicName,
+      totalQuestions: Math.min(t.questionCount, 20), // cap at 20 per week for UX
+      doneQuestions: 0,
+      status: i === 0 ? 'active' : 'locked',
+    }));
+
+    const actualWeeks = weeks.length;
+
     const newRoadmap = await roadmapRepository.create({
       studentId: user.userId as any,
-      companyId: company._id as any,   // real company _id from DB
+      companyId: company._id as any,
       companySlug: safeSlug,
-      companyName: company.name,        // real company name from DB
+      companyName: company.name,
       roleName: targetRole || 'SDE-1',
-      weeksCommitted: Math.min(Math.max(Number(preparationWeeks) || 12, 4), 52),
+      weeksCommitted: actualWeeks,
       currentWeek: 1,
       pctComplete: 0,
       isActive: true,
-      weeks: [
-        {
-          weekNumber: 1,
-          topicLabel: 'Arrays & Strings',
-          totalQuestions: 10,
-          doneQuestions: 0,
-          status: 'active',
-        },
-      ],
+      weeks,
     } as any);
 
     return NextResponse.json(

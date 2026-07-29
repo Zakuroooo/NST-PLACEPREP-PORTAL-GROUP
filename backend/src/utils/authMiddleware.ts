@@ -59,13 +59,25 @@ export async function requireAuth(
     );
   }
 
-  // Fire-and-forget lastSeenAt with per-userId debounce (2-min window)
+  // Fire-and-forget lastSeenAt + profile lastActiveAt with per-userId debounce (2-min window)
   const lastWrittenAt = lastSeenWrittenAt.get(payload.userId) ?? 0;
   if (Date.now() - lastWrittenAt > SEEN_DEBOUNCE_MS) {
     lastSeenWrittenAt.set(payload.userId, Date.now());
+    // Update User.lastSeenAt (used by userRepository.getActiveCountByRole)
     import('../models/User').then(({ default: User }) => {
       User.updateOne({ _id: payload.userId }, { $set: { lastSeenAt: new Date() } }).catch(() => {});
     }).catch(() => {});
+    // Update profile lastActiveAt — admin engagement API queries StudentProfile/FacultyProfile.lastActiveAt
+    // to compute "Students Online Now" and "Faculty Online Now" counts.
+    if (payload.role === 'student') {
+      import('../models/StudentProfile').then(({ default: StudentProfile }) => {
+        StudentProfile.updateOne({ userId: payload.userId }, { $set: { lastActiveAt: new Date() } }).catch(() => {});
+      }).catch(() => {});
+    } else if (payload.role === 'faculty') {
+      import('../models/FacultyProfile').then(({ default: FacultyProfile }) => {
+        FacultyProfile.updateOne({ userId: payload.userId }, { $set: { lastActiveAt: new Date() } }).catch(() => {});
+      }).catch(() => {});
+    }
   }
 
   return {

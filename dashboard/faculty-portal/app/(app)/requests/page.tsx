@@ -33,7 +33,15 @@ import {
   isToday 
 } from "date-fns";
 
-const TIME_SLOTS = ["9:00 AM", "10:00 AM", "11:00 AM", "2:00 PM", "3:00 PM", "4:00 PM", "5:00 PM"];
+// HH:mm values — matches Zod regex /^\d{2}:\d{2}$/ required by proposeSessionSchema
+const TIME_SLOTS = ["09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"];
+function fmtTimeSlot(t: string) {
+  const [hStr, mStr] = t.split(":");
+  const h = parseInt(hStr, 10);
+  const suffix = h >= 12 ? "PM" : "AM";
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${mStr} ${suffix}`;
+}
 
 const STATUS_CFG: Record<SessionStatus, { label: string; cls: string; border: string; icon: React.ElementType; color: string }> = {
   pending: { 
@@ -522,7 +530,7 @@ export default function RequestsPage() {
                                 >
                                   {TIME_SLOTS.map((t) => (
                                     <option key={t} value={t}>
-                                      {t}
+                                      {fmtTimeSlot(t)}
                                     </option>
                                   ))}
                                 </select>
