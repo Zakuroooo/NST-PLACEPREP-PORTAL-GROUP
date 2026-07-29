@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, Bell, User } from "lucide-react";
@@ -37,27 +37,28 @@ export default function Navbar() {
   );
 
   const unreadCount: number = notifData?.data?.unreadCount ?? 0;
-  const hasShownLoginToast = useRef(false);
 
   useEffect(() => {
-    // Show login-time toast once per session if there are unread notifications
-    if (notifData && !hasShownLoginToast.current) {
-      hasShownLoginToast.current = true;
+    // Show once per browser-tab session using sessionStorage
+    // useRef resets on every unmount (page nav/refresh) — sessionStorage persists the whole tab lifetime
+    const TOAST_KEY = 'notif_login_toast_shown';
+    if (notifData && !sessionStorage.getItem(TOAST_KEY)) {
+      sessionStorage.setItem(TOAST_KEY, '1');
       if (unreadCount > 0) {
         toast.info(
-          `You have ${unreadCount} unread notification${unreadCount > 1 ? "s" : ""}`,
+          `You have ${unreadCount} unread notification${unreadCount > 1 ? 's' : ''}`,
           {
-            duration: 4000,
-            description: "Visit the Notifications page to review them.",
+            duration: 15000, // 15 seconds as requested
+            description: 'Visit the Notifications page to review them.',
             action: {
-              label: "View",
-              onClick: () => { window.location.href = "/notifications"; },
+              label: 'View',
+              onClick: () => { window.location.href = '/notifications'; },
             },
           }
         );
       }
     }
-  }, [notifData, unreadCount]);
+  }, [notifData]); // Only re-run when data first arrives — not on unreadCount change
 
   return (
     <>

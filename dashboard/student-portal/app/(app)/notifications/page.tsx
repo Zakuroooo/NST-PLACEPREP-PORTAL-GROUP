@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { Bell, CheckCheck, Trophy, BarChart, Zap, CheckCircle, BellRing, FileText, Target, Star } from "lucide-react";
 import { toast } from "sonner";
 import { useNotifications, markNotificationRead, markAllNotificationsRead } from "@/lib/hooks";
@@ -8,6 +9,7 @@ type AppNotification = {
   title: string;
   subtitle?: string;
   iconName?: string;
+  type?: string;
   read: boolean;
   createdAt: string;
 };
@@ -30,14 +32,14 @@ function NotificationRow({
   onMarkRead,
 }: {
   notification: AppNotification;
-  onMarkRead: (id: string) => void;
+  onMarkRead: (id: string, type: string, alreadyRead: boolean) => void;
 }) {
   return (
     <div
       className={`flex items-start gap-4 px-5 py-4 hover:bg-gray-50 transition-colors cursor-pointer ${
         !notification.read ? "bg-blue-50/40" : ""
       }`}
-      onClick={() => onMarkRead(notification.id)}
+      onClick={() => onMarkRead(notification.id, notification.type ?? '', notification.read)}
     >
       {/* Icon */}
       <div className="w-10 h-10 bg-white border border-gray-200 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
@@ -77,6 +79,7 @@ export default function NotificationsPage() {
         title: n.title,
         subtitle: n.subtitle,
         iconName: n.iconName,
+        type: n.type,
         read: n.isRead ?? n.read ?? false,
         createdAt: n.createdAt,
       }))
@@ -84,13 +87,35 @@ export default function NotificationsPage() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
-  const handleMarkRead = async (id: string) => {
-    try {
-      await markNotificationRead(id);
-      mutate(); // revalidate from server
-    } catch {
-      toast.error("Could not mark notification as read.");
+  const router = useRouter();
+
+  // Map notification type to the relevant student-portal route
+  const getNotifLink = (type: string): string => {
+    switch (type) {
+      case 'session':    return '/sessions';
+      case 'doubt':      return '/doubts';
+      case 'badge':      return '/leaderboard';
+      case 'xp':         return '/leaderboard';
+      case 'roadmap':    return '/roadmap';
+      case 'experience': return '/experiences';
+      case 'question':   return '/practice';
+      default:           return '';
     }
+  };
+
+  const handleMarkRead = async (id: string, type: string, alreadyRead: boolean) => {
+    // Deep-link to relevant section first
+    const link = getNotifLink(type);
+    try {
+      if (!alreadyRead) {
+        // Only hit API if it's actually unread
+        await markNotificationRead(id);
+        mutate(); // revalidate from server
+      }
+    } catch {
+      toast.error('Could not mark notification as read.');
+    }
+    if (link) router.push(link);
   };
 
   const handleMarkAllRead = async () => {

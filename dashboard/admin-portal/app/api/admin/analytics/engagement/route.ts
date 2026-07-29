@@ -130,10 +130,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       }
     }
 
-    // Today's DAU — count unique solvers today
-    const todayActiveStudents = await QuestionCompletion.distinct('studentId', {
-      completedAt: { $gte: todayStart },
-    });
+    // Today's DAU — count unique users active today using User.lastSeenAt
+    const { default: User } = await import('placeprep-backend/src/models/User');
+    const [todayActiveStudents, todayActiveFaculty] = await Promise.all([
+      User.countDocuments({ role: 'student', lastSeenAt: { $gte: todayStart } }),
+      User.countDocuments({ role: 'faculty', lastSeenAt: { $gte: todayStart } }),
+    ]);
 
     return successResponse({
       currentOnline: {
@@ -144,8 +146,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       monthlyActive,
       hourlyHeatmap,
       todayDAU: {
-        students: todayActiveStudents.length,
-        faculty: totalFaculty > 0 ? Math.min(Math.round(todayActiveStudents.length * 0.2), totalFaculty) : 0,
+        students: todayActiveStudents,
+        faculty: todayActiveFaculty,
       },
     });
   } catch (error) {

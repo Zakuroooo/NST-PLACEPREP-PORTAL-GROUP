@@ -6,6 +6,7 @@
 import { sessionRepository } from '../repositories/session.repository';
 import { notificationRepository } from '../repositories/notification.repository';
 import { facultyRepository } from '../repositories/faculty.repository';
+import { notificationService } from './notification.service';
 import { ApiError } from '../utils/apiError';
 import type { BookSessionInput } from '../validators/session.validator';
 
@@ -44,6 +45,14 @@ export const sessionService = {
       iconName: 'Calendar',
     });
 
+    // Notify all admins — fire-and-forget so it never blocks the response
+    notificationService.notifyAdmins({
+      type: 'session',
+      title: 'New Session Request',
+      subtitle: `${studentName} requested a session on: ${data.topic.slice(0, 60)}`,
+      iconName: 'Calendar',
+    }).catch(() => {});
+
     return session;
   },
 
@@ -78,6 +87,14 @@ export const sessionService = {
       iconName: 'CheckCircle',
     });
 
+    // Notify admins
+    notificationService.notifyAdmins({
+      type: 'session',
+      title: 'Session Confirmed',
+      subtitle: `${session.studentName} ↔ ${session.facultyName}: "${session.topic.slice(0, 50)}"`,
+      iconName: 'CheckCircle',
+    }).catch(() => {});
+
     return updated;
   },
 
@@ -98,6 +115,14 @@ export const sessionService = {
       subtitle: `"${session.topic.slice(0, 50)}" could not be scheduled. Try another time.`,
       iconName: 'XCircle',
     });
+
+    // Notify admins
+    notificationService.notifyAdmins({
+      type: 'session',
+      title: 'Session Declined',
+      subtitle: `${session.facultyName} declined ${session.studentName}'s session request.`,
+      iconName: 'XCircle',
+    }).catch(() => {});
 
     return updated;
   },

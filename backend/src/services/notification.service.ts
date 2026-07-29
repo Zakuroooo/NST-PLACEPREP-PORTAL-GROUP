@@ -77,4 +77,20 @@ export const notificationService = {
   async countUnread(userId: string): Promise<number> {
     return notificationRepository.countUnread(userId);
   },
+
+  /**
+   * Send an activity notification to ALL admin users.
+   * Called fire-and-forget from session/doubt services so admins see platform activity.
+   */
+  async notifyAdmins(data: {
+    type: INotification['type'];
+    title: string;
+    subtitle?: string;
+    iconName?: string;
+  }): Promise<void> {
+    const admins = await userRepository.findAllByRole('admin');
+    if (admins.length === 0) return;
+    const adminIds = admins.map((u) => (u._id as { toString(): string }).toString());
+    await notificationRepository.createMany(adminIds, data);
+  },
 };
