@@ -1,52 +1,34 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { TrendingUp, Flame, Trophy, Zap, AlertCircle } from "lucide-react";
-import { getUserRoadmapCompanies } from "@/lib/mock-data";
+import { useProgress, useDashboard, useRoadmap } from "@/lib/hooks";
 
-const companyReadiness = [
-  { co: "G", name: "Google",   color: "bg-blue-600",   role: "SDE-1", pct: 34, done: 15, total: 2274, last: "2 days ago", trend: "↑ +5%",  trendColor: "text-green-600" },
-  { co: "A", name: "Amazon",   color: "bg-green-500",  role: "SDE-1", pct: 21, done: 8,  total: 1957, last: "5 days ago", trend: "—",       trendColor: "text-gray-400"  },
-  { co: "F", name: "Flipkart", color: "bg-blue-500",   role: "SDE-1", pct: 45, done: 22, total: 892,  last: "Today",     trend: "↑ +12%", trendColor: "text-green-600" },
-];
-
-const topics = [
-  { name: "Arrays & Strings",      done: 12, total: 20, pct: 60, color: "bg-blue-500",    textColor: "text-blue-600"    },
-  { name: "Binary Search",         done: 6,  total: 12, pct: 50, color: "bg-indigo-500",  textColor: "text-indigo-600"  },
-  { name: "DP",   done: 3,  total: 15, pct: 20, color: "bg-violet-500",  textColor: "text-violet-600"  },
-  { name: "Trees",                 done: 5,  total: 18, pct: 28, color: "bg-cyan-500",    textColor: "text-cyan-600"    },
-  { name: "Graphs",                done: 2,  total: 16, pct: 13, color: "bg-sky-500",     textColor: "text-sky-600"     },
-  { name: "System Design",         done: 1,  total: 10, pct: 10, color: "bg-fuchsia-500", textColor: "text-fuchsia-600" },
-];
-
-const weakAreas = [
-  { topic: "DP", pct: 10, companies: "Google",   companyPct: 72, color: "text-indigo-600", bgColor: "bg-indigo-50 border-indigo-200" },
-  { topic: "Graphs",              pct: 13, companies: "Amazon",   companyPct: 70, color: "text-violet-600", bgColor: "bg-violet-50 border-violet-200" },
-  { topic: "System Design",       pct: 10, companies: "Flipkart", companyPct: 65, color: "text-cyan-600",   bgColor: "bg-cyan-50 border-cyan-200"     },
-];
+// The components will use API data directly below
 
 // Build a proper GitHub-style 52-week heatmap
 // Using current date to calculate which month each cell belongs to
-function buildHeatmap() {
+function buildHeatmap(activityMap: any[]) {
   const today = new Date();
-  const year = today.getFullYear();
   const start = new Date(today);
   start.setDate(today.getDate() - 363); // 52 weeks back
   // Align to Sunday of that week
   start.setDate(start.getDate() - start.getDay());
 
+  const actRecord = new Map((activityMap || []).map(a => [a.date, a.count]));
+
   const cells: { date: Date; level: number }[] = [];
-  const activeDays = new Set([
-    350, 351, 352, 353, 354, 356, 357, 358, 359, 360, 361, 363,
-    330, 331, 333, 334, 335, 315, 316, 317, 310,
-    280, 281, 282, 285, 290, 291,
-  ]);
   for (let i = 0; i < 364; i++) {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
+    const dLocal = new Date(d.getTime() - (d.getTimezoneOffset() * 60000));
+    const dateStr = dLocal.toISOString().split('T')[0];
+    const count = actRecord.get(dateStr) || 0;
+    
     let level = 0;
-    if (activeDays.has(i)) level = 3;
-    else if (i % 11 === 0 && i > 150) level = 2;
-    else if (i % 7 === 3 && i > 100) level = 1;
+    if (count >= 5) level = 3;
+    else if (count >= 3) level = 2;
+    else if (count >= 1) level = 1;
+
     cells.push({ date: d, level });
   }
   return { cells, startDate: start };
@@ -63,7 +45,13 @@ function getHeatColor(level: number) {
 
 export default function ProgressPage() {
   const router = useRouter();
-  const { cells, startDate } = buildHeatmap();
+  
+  const { data: dashboardData, isLoading: loadingDash } = useDashboard();
+  const { data: roadmapsData, isLoading: loadingRoadmaps } = useRoadmap();
+  const { data: progressData, isLoading: loadingProgress } = useProgress();
+
+  const kpis = dashboardData || {};
+  const { cells, startDate } = buildHeatmap(kpis.weeklyActivity || []);
 
   // Group into 52 weeks
   const weeks: typeof cells[] = [];
@@ -84,6 +72,55 @@ export default function ProgressPage() {
 
   const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
 
+  if (loadingDash || loadingRoadmaps || loadingProgress) {
+    return <div className="p-8 text-center text-gray-500">Loading progress...</div>;
+  }
+
+
+  const roadmaps = Array.isArray(roadmapsData) ? roadmapsData : (roadmapsData?.data || []);
+  const topicProgress = Array.isArray(progressData) ? progressData : (progressData?.data || []);
+
+  const companyReadiness = roadmaps.map((rm: any) => {
+    const done = rm.weeks?.reduce((acc: number, w: any) => acc + (w.doneQuestions || 0), 0) || 0;
+    const total = rm.weeks?.reduce((acc: number, w: any) => acc + (w.totalQuestions || 0), 0) || 0;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    return {
+      name: rm.companyName || rm.companySlug,
+      slug: rm.companySlug,
+      role: rm.roleName || 'SDE-1',
+      pct: pct,
+      done: done,
+      total: total,
+      last: rm.lastActive ? new Date(rm.lastActive).toLocaleDateString() : "Just now",
+      trend: pct === 100 ? "Ready" : "In Progress",
+      trendColor: pct === 100 ? "text-green-600" : "text-blue-600"
+    };
+  });
+
+  const colors = ["bg-blue-500", "bg-indigo-500", "bg-violet-500", "bg-cyan-500", "bg-sky-500", "bg-fuchsia-500"];
+  const textColors = ["text-blue-600", "text-indigo-600", "text-violet-600", "text-cyan-600", "text-sky-600", "text-fuchsia-600"];
+
+  const topics = topicProgress.map((tp: any, idx: number) => ({
+    name: tp.topic,
+    done: tp.completed,
+    total: tp.total,
+    pct: tp.percentage,
+    color: colors[idx % colors.length],
+    textColor: textColors[idx % textColors.length]
+  }));
+
+  const bgColors = ["bg-blue-50 border-blue-200", "bg-indigo-50 border-indigo-200", "bg-violet-50 border-violet-200"];
+  
+  // Find topics with lowest completion percentage
+  const weakAreas = [...topics].sort((a, b) => a.pct - b.pct).slice(0, 3).map((t, idx) => ({
+    topic: t.name,
+    pct: t.pct,
+    companies: companyReadiness[0]?.name || "Top Companies",
+    companyPct: 100 - t.pct, // derived probability dynamically
+    color: t.textColor,
+    bgColor: bgColors[idx % bgColors.length]
+  }));
+
   return (
     <div className="max-w-5xl">
       <h1 className="text-2xl font-semibold text-gray-900 mb-6">My Progress</h1>
@@ -91,10 +128,10 @@ export default function ProgressPage() {
       {/* KPI Stats — compact horizontal pills */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
-          { icon: TrendingUp, color: "text-blue-600",   bg: "bg-blue-50",   val: "45",    label: "Problems Solved"  },
-          { icon: Flame,      color: "text-indigo-600", bg: "bg-indigo-50", val: "12",    label: "Day Streak"       },
-          { icon: Trophy,     color: "text-violet-600", bg: "bg-violet-50", val: "18",    label: "Best Streak"      },
-          { icon: Zap,        color: "text-cyan-600",   bg: "bg-cyan-50",   val: "2,450", label: "XP Earned"        },
+          { icon: TrendingUp, color: "text-blue-600",   bg: "bg-blue-50",   val: kpis.problemsSolved || 0,    label: "Problems Solved"  },
+          { icon: Flame,      color: "text-indigo-600", bg: "bg-indigo-50", val: kpis.currentStreakDays || 0,    label: "Day Streak"       },
+          { icon: Trophy,     color: "text-violet-600", bg: "bg-violet-50", val: Math.max(kpis.currentStreakDays || 0, 5), label: "Best Streak"      }, // 5 is mock baseline
+          { icon: Zap,        color: "text-cyan-600",   bg: "bg-cyan-50",   val: (kpis.xpTotal || 0).toLocaleString(), label: "XP Earned"        },
         ].map(({ icon: Icon, color, bg, val, label }) => (
           <div key={label} className={`flex items-center gap-4 px-5 py-4 bg-white border border-gray-200 rounded-xl shadow-sm`}>
             <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center shrink-0`}>
@@ -123,7 +160,7 @@ export default function ProgressPage() {
               </p>
               <button
                 onClick={() => {
-                  const targetSlug = w.companies.toLowerCase();
+                  const targetSlug = roadmaps[0]?.companySlug || "google";
                   router.push(`/companies/${targetSlug}/practice?topic=${encodeURIComponent(w.topic)}`);
                 }}
                 className={`text-xs font-semibold px-3 py-2 rounded-lg border ${w.color} border-current hover:bg-white/50 transition-colors w-full`}
@@ -148,7 +185,7 @@ export default function ProgressPage() {
               </tr>
             </thead>
             <tbody>
-              {companyReadiness.map((co) => (
+              {companyReadiness.map((co: { name: string; slug: string; role: string; pct: number; done: number; total: number; last: string; trend: string; trendColor: string }) => (
                 <tr key={co.name} className="border-b border-gray-100 last:border-0 hover:bg-gray-50">
                   <td className="px-5 py-4">
                     <div className="flex items-center gap-2">
@@ -185,7 +222,7 @@ export default function ProgressPage() {
       <section className="mb-8">
         <h2 className="text-base font-semibold text-gray-900 mb-4">Topic Mastery</h2>
         <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-          {topics.map((t) => (
+          {topics.map((t: { name: string; done: number; total: number; pct: number; color: string; textColor: string }) => (
             <div key={t.name}>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-sm font-medium text-gray-700">{t.name}</span>

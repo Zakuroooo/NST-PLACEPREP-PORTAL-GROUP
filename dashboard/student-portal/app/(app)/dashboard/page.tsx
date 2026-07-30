@@ -1,85 +1,135 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   Activity, Trophy, CheckSquare, Square, ExternalLink,
   Clock, TrendingUp, ChevronRight, Zap
 } from "lucide-react";
+import { toast } from "sonner";
+import useSWR from "swr";
 
-import {
-  dashboardRecentReports,
-  getUserRoadmapCompanies,
-  userPrepStats,
-} from "@/lib/mock-data";
+import { useDashboard } from "@/lib/hooks";
+
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 // Prep Score — calculated from real product features only:
 // 1. Practice consistency: problems solved vs. assigned (45%)
 // 2. Day streak score: current streak / 30 × 100 (30%)
 // 3. XP progress: xpEarned / maxXpForLevel × 100 (25%)
-function calcPrepScore(stats: typeof userPrepStats): number {
-  const practiceScore = Math.min((stats.problemsSolved / stats.totalAssigned) * 100, 100) * 0.45;
-  const streakScore = Math.min((stats.dayStreak / 30) * 100, 100) * 0.30;
-  const xpScore = Math.min((stats.xpEarned / stats.maxXpForLevel) * 100, 100) * 0.25;
+function calcPrepScore(solved: number, assigned: number, streak: number, xp: number, targetXp: number = 5000, targetStreak: number = 30): number {
+  const practiceScore = Math.min((solved / Math.max(assigned, 1)) * 100, 100) * 0.45;
+  const streakScore = Math.min((streak / targetStreak) * 100, 100) * 0.30;
+  const xpScore = Math.min((xp / targetXp) * 100, 100) * 0.25;
   return Math.round(practiceScore + streakScore + xpScore);
 }
 
+function timeAgo(date: string | Date) {
+  const diff = Date.now() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} mins ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hours ago`;
+  return `${Math.floor(hrs / 24)} days ago`;
+}
+
+
 export default function DashboardPage() {
   const router = useRouter();
-  const [checked, setChecked] = useState<Record<number, boolean>>({
-    // Pre-mark questions already done in mock data
-    1: true, 10: true, 11: true,
+  const [checked, setChecked] = useState<Record<number, boolean>>({});
+
+  // Primary dashboard data
+  const { data: apiData, isLoading, error } = useDashboard();
+  // Recent interview experiences for the bottom section
+  const { data: expData } = useSWR('/api/experiences?limit=3', fetcher);
+
+  if (error) {
+    toast.error("Could not load dashboard data. Showing cached view.");
+  }
+
+  // Map roadmaps to company cards
+  const targetCompanies = (apiData?.roadmaps || []).map((r: any) => ({
+    name: r.companyName,
+    role: r.roleName,
+    readiness: r.pctComplete,
+    slug: r.companySlug,
+    logoUrl: r.companyLogoUrl,
+  }));
+
+  const solved    = apiData?.stats?.problemsSolved   ?? 0;
+  const assigned  = apiData?.stats?.companiesOnRoadmap ? apiData.stats.companiesOnRoadmap * 20 : 1;
+  const streak    = apiData?.stats?.currentStreakDays ?? 0;
+  const xp        = apiData?.stats?.xpTotal           ?? 0;
+  const targetXp  = apiData?.stats?.targetXp          ?? 5000;
+  const targetStreak = apiData?.stats?.targetStreak   ?? 30;
+  const tasks     = apiData?.roadmaps ?? [];
+  const prepScore = apiData?.stats?.prepScore ?? calcPrepScore(solved, assigned, streak, xp, targetXp, targetStreak);
+  const studentName = apiData?.student?.fullName ?? apiData?.fullName ?? "Student";
+  const recentExperiences = expData?.data?.experiences ?? [];
+  const latestActivity = apiData?.stats?.latestActivity;
+
+  // Create an array of 30 days for Activity Map
+  const today = new Date();
+  const thirtyDays = Array.from({ length: 30 }).map((_, i) => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (29 - i));
+    const dateStr = d.toISOString().split('T')[0];
+    const match = (apiData?.stats?.weeklyActivity || []).find((a: any) => a.date === dateStr);
+    return match ? match.count : 0;
   });
 
-  const [targetCompanies, setTargetCompanies] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
-
-  useEffect(() => {
-    // Check onboarding status first
-    try {
-      const hasOnboarded = sessionStorage.getItem("has_onboarded");
-      if (!hasOnboarded) {
-        router.push("/onboarding/step1");
-        return;
-      }
-    } catch { /* ignore */ }
-
-    const roadmaps = getUserRoadmapCompanies();
-    const mappedCompanies = roadmaps.map(r => ({
-      initial: r.initial,
-      name: r.name,
-      role: r.role,
-      readiness: r.pctComplete > 0 ? r.pctComplete : Math.round((r.currentWeek / r.totalWeeks) * 100) || 0,
-      color: r.color,
-      slug: r.slug
-    }));
-    setTargetCompanies(mappedCompanies);
-
-    const mappedTasks = roadmaps.map(r => {
-      const activeWeek = r.weeks.find(w => w.status === "active") || r.weeks[0];
-      if (!activeWeek) return null;
-      return {
-        company: r.name,
-        slug: r.slug,
-        week: activeWeek.weekNumber,
-        day: 1, // mock
-        questions: activeWeek.questions || []
-      };
-    }).filter(Boolean);
-    setTasks(mappedTasks);
-  }, []);
-
-  const prepScore = calcPrepScore(userPrepStats);
+  if (isLoading) {
+    return (
+      <div className="flex flex-col lg:flex-row gap-6 animate-pulse">
+        <div className="flex-1 min-w-0 space-y-6">
+          {/* Activity bar skeleton */}
+          <div className="h-5 bg-gray-100 rounded w-64" />
+          {/* Company cards skeleton */}
+          <section>
+            <div className="h-5 bg-gray-100 rounded w-40 mb-4" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="bg-gray-100 rounded-xl h-36" />
+              ))}
+            </div>
+          </section>
+          {/* Today tasks skeleton */}
+          <section>
+            <div className="h-5 bg-gray-100 rounded w-36 mb-4" />
+            <div className="space-y-3">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-12 bg-gray-100 rounded-xl" />
+              ))}
+            </div>
+          </section>
+        </div>
+        {/* Right sidebar skeleton */}
+        <div className="w-full lg:w-72 space-y-4">
+          <div className="h-40 bg-gray-100 rounded-2xl" />
+          <div className="h-48 bg-gray-100 rounded-2xl" />
+          <div className="h-32 bg-gray-100 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
       {/* ── Main Content ── */}
       <div className="flex-1 min-w-0">
         {/* Activity bar */}
-        <div className="flex items-center gap-2 mb-6 text-sm text-gray-500">
-          <Clock className="w-4 h-4" />
-          <span>Latest Activity: Completed &quot;Two Sum&quot; 2 hours ago</span>
-        </div>
+        {latestActivity ? (
+          <div className="flex items-center gap-2 mb-6 text-sm text-gray-500">
+            <Clock className="w-4 h-4" />
+            <span>Latest Activity: Completed &quot;{latestActivity.title}&quot; {timeAgo(latestActivity.completedAt)}</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 mb-6 text-sm text-gray-500">
+            <Clock className="w-4 h-4" />
+            <span>No activity yet. Start your first task!</span>
+          </div>
+        )}
 
         {/* Target Companies */}
         <section className="mb-8">
@@ -93,7 +143,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
-              {targetCompanies.map((co) => {
+              {targetCompanies.map((co: any) => {
                 return (
                   <div key={co.name} className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-sm transition-shadow flex flex-col">
                     <div className="flex items-center justify-between mb-3 flex-1">
@@ -160,8 +210,8 @@ export default function DashboardPage() {
               {(() => {
                 // If user targets only 1 company → show 5 questions, otherwise show 3
                 const maxQPerCompany = tasks.length === 1 ? 5 : 3;
-                return tasks.map((co) => (
-                <div key={co.slug} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                return tasks.map((co: any, index: number) => (
+                <div key={co.slug || `task-${index}`} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                   {/* Company header */}
                   <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-100">
                     <div className="flex items-center gap-2.5">
@@ -187,7 +237,7 @@ export default function DashboardPage() {
 
                   {/* Questions — capped to maxQPerCompany */}
                   <div className="divide-y divide-gray-50">
-                    {co.questions.slice(0, maxQPerCompany).map((q: any) => (
+                    {(co.questions || []).slice(0, maxQPerCompany).map((q: any) => (
                     <div
                       key={q.id}
                       className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
@@ -225,40 +275,45 @@ export default function DashboardPage() {
         </section>
         )}
 
-        {/* Recent Reports */}
+        {/* Recent Interview Reports — from real API */}
         <section>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-base font-semibold text-gray-900">Recent Interview Reports</h2>
             <Link href="/submit" className="text-sm text-blue-600 font-medium hover:underline">Browse All</Link>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {dashboardRecentReports.map((r) => (
-              <Link
-                key={r.name}
-                href={`/submit?expand=${r.id}`}
-                className="block bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`https://www.google.com/s2/favicons?sz=64&domain=${r.name.toLowerCase()}.com`}
-                    alt={r.name}
-                    className="w-8 h-8 rounded-lg shrink-0 object-contain bg-white border border-gray-100 p-0.5"
-                    onError={(e) => { (e.target as HTMLImageElement).src = "https://www.google.com/s2/favicons?sz=64&domain=example.com"; }}
-                  />
-                  <span className="font-semibold text-gray-900 text-sm">{r.name}</span>
-                  <span className="ml-auto text-xs text-gray-400">{r.time}</span>
-                  <span className="bg-gray-100 text-gray-600 text-xs rounded px-2 py-0.5">{r.rounds} Rounds</span>
-                </div>
-                <p className="text-sm text-gray-600 mb-3">{r.role}</p>
-                <div className="flex flex-wrap gap-1">
-                  {r.tags.map((t) => (
-                    <span key={t} className="bg-gray-100 text-gray-600 text-xs rounded px-2 py-0.5">{t}</span>
-                  ))}
-                </div>
-              </Link>
-            ))}
-          </div>
+          {recentExperiences.length === 0 ? (
+            <div className="text-sm text-gray-500 bg-gray-50 border border-gray-200 rounded-xl p-5 text-center">
+              No interview reports yet. <Link href="/submit" className="text-blue-600 font-medium hover:underline">Be the first to share yours.</Link>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {recentExperiences.map((r: any) => (
+                <Link
+                  key={r._id}
+                  href={`/submit?expand=${r._id}`}
+                  className="block bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-gray-300 transition-all cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://www.google.com/s2/favicons?sz=64&domain=${r.companySlug}.com`}
+                      alt={r.companySlug}
+                      className="w-8 h-8 rounded-lg shrink-0 object-contain bg-white border border-gray-100 p-0.5"
+                      onError={(e) => { (e.target as HTMLImageElement).src = "https://www.google.com/s2/favicons?sz=64&domain=example.com"; }}
+                    />
+                    <span className="font-semibold text-gray-900 text-sm capitalize">{r.companySlug}</span>
+                    <span className="ml-auto text-xs text-gray-400">{r.outcome === 'offer' ? 'Offer' : r.outcome}</span>
+                    <span className="bg-gray-100 text-gray-600 text-xs rounded px-2 py-0.5">{r.roundsCount} Rounds</span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">{r.role}</p>
+                  <div className="flex flex-wrap gap-1">
+                    <span className="bg-gray-100 text-gray-600 text-xs rounded px-2 py-0.5">{r.overallDifficulty}</span>
+                    <span className="bg-gray-100 text-gray-600 text-xs rounded px-2 py-0.5">{r.outcome}</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
         </section>
       </div>
 
@@ -287,9 +342,9 @@ export default function DashboardPage() {
           {/* Score breakdown */}
           <div className="space-y-2">
             {[
-              { label: "Practice", val: Math.round(Math.min((userPrepStats.problemsSolved / userPrepStats.totalAssigned) * 100, 100)), color: "bg-blue-500" },
-              { label: "Streak", val: Math.round(Math.min((userPrepStats.dayStreak / 30) * 100, 100)), color: "bg-indigo-500" },
-              { label: "XP Progress", val: Math.round(Math.min((userPrepStats.xpEarned / userPrepStats.maxXpForLevel) * 100, 100)), color: "bg-violet-500" },
+              { label: "Practice", val: Math.round(Math.min((solved / Math.max(assigned, 1)) * 100, 100)), color: "bg-blue-500" },
+              { label: "Streak", val: Math.round(Math.min((streak / targetStreak) * 100, 100)), color: "bg-indigo-500" },
+              { label: "XP Progress", val: Math.round(Math.min((xp / targetXp) * 100, 100)), color: "bg-violet-500" },
             ].map(({ label, val, color }) => (
               <div key={label}>
                 <div className="flex justify-between text-xs text-gray-500 mb-1">
@@ -306,14 +361,14 @@ export default function DashboardPage() {
         {/* Streak */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
           <Activity className="w-6 h-6 text-blue-600 mx-auto mb-2" />
-          <div className="text-2xl font-bold text-gray-900">{userPrepStats.dayStreak}</div>
+          <div className="text-2xl font-bold text-gray-900">{streak}</div>
           <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">Day Streak</div>
         </div>
 
         {/* XP Badge */}
         <div className="bg-white border border-gray-200 rounded-xl p-4 text-center">
           <Trophy className="w-6 h-6 text-blue-600 mx-auto mb-2" />
-          <div className="text-2xl font-bold text-gray-900">{userPrepStats.xpEarned.toLocaleString()}</div>
+          <div className="text-2xl font-bold text-gray-900">{xp.toLocaleString()}</div>
           <div className="text-xs text-gray-500 font-medium uppercase tracking-wide">XP Earned</div>
         </div>
 
@@ -321,24 +376,22 @@ export default function DashboardPage() {
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-gray-900 uppercase tracking-wide">Activity Map</h3>
-            <span className="text-xs text-gray-400">June 2026</span>
+            <span className="text-xs text-gray-400">Last 30 Days</span>
           </div>
           <div className="grid grid-cols-7 gap-1">
             {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
               <div key={i} className="text-[10px] text-gray-400 text-center">{d}</div>
             ))}
-            {Array.from({ length: 30 }).map((_, i) => {
-              const actives = [2, 3, 5, 6, 7, 9, 12, 13, 14, 18, 19, 20, 25, 26, 27];
-              const dark = [25, 26, 27];
-              const mid = [12, 13, 14, 18, 19, 20];
+            {thirtyDays.map((count, i) => {
               return (
                 <div
                   key={i}
                   className={`h-3 w-full rounded-sm ${
-                    dark.includes(i) ? "bg-green-700" :
-                    mid.includes(i) ? "bg-green-500" :
-                    actives.includes(i) ? "bg-green-300" : "bg-gray-100"
+                    count >= 5 ? "bg-green-700" :
+                    count >= 3 ? "bg-green-500" :
+                    count >= 1 ? "bg-green-300" : "bg-gray-100"
                   }`}
+                  title={count > 0 ? `${count} problems solved` : 'No activity'}
                 />
               );
             })}
@@ -357,15 +410,15 @@ export default function DashboardPage() {
           <h3 className="text-xs font-semibold text-gray-900 mb-3 uppercase tracking-wide">Problems Solved</h3>
           <div className="flex items-end justify-between">
             <div>
-              <span className="text-3xl font-bold text-gray-900">{userPrepStats.problemsSolved}</span>
-              <span className="text-sm text-gray-400 ml-1">/ {userPrepStats.totalAssigned}</span>
+              <span className="text-3xl font-bold text-gray-900">{solved}</span>
+              <span className="text-sm text-gray-400 ml-1">/ {assigned}</span>
             </div>
             <TrendingUp className="w-5 h-5 text-green-500" />
           </div>
           <div className="h-1.5 bg-gray-100 rounded-full mt-3">
             <div
               className="h-1.5 bg-green-500 rounded-full"
-              style={{ width: `${(userPrepStats.problemsSolved / userPrepStats.totalAssigned) * 100}%` }}
+              style={{ width: `${Math.min((solved / Math.max(assigned, 1)) * 100, 100)}%` }}
             />
           </div>
           <p className="text-[10px] text-gray-400 mt-1.5">Assigned roadmap problems</p>

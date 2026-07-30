@@ -1,6 +1,6 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
-import { Send, Search, Circle } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Send, Search, Circle, Loader2 } from "lucide-react";
 
 interface Message {
   id: string;
@@ -20,36 +20,6 @@ interface Faculty {
   lastAt: string;
   unread: number;
 }
-
-const mockFaculty: Faculty[] = [
-  {
-    id: "f1", name: "Prof. Sharma", initials: "PS",
-    subject: "DSA & System Design Mentor", online: true,
-    lastMessage: "You're on the right track! Keep practising.",
-    lastAt: "2026-06-24T13:45:00Z", unread: 1,
-  },
-  {
-    id: "f2", name: "Dr. Meera Kapoor", initials: "MK",
-    subject: "HR & Soft Skills Coach", online: false,
-    lastMessage: "Send me your updated STAR story by tomorrow.",
-    lastAt: "2026-06-23T10:00:00Z", unread: 0,
-  },
-];
-
-const mockMessages: Record<string, Message[]> = {
-  f1: [
-    { id: "m1", senderId: "faculty", body: "Hi! How is your prep going? Did you try the two-pointer problems I suggested?", sentAt: "2026-06-24T11:00:00Z", seen: true },
-    { id: "m2", senderId: "student", body: "Yes sir! I solved 8 of them. The ones involving sorted arrays felt intuitive but the unsorted ones still confuse me.", sentAt: "2026-06-24T11:05:00Z", seen: true },
-    { id: "m3", senderId: "faculty", body: "That's normal — for unsorted arrays you often need to sort first (O(n log n)) before applying two-pointer. The key insight: two-pointer only works reliably when the array has some ordering property. Try 3Sum next!", sentAt: "2026-06-24T12:00:00Z", seen: true },
-    { id: "m4", senderId: "student", body: "Got it! I'll try 3Sum today. Should I also look at 4Sum after?", sentAt: "2026-06-24T12:30:00Z", seen: true },
-    { id: "m5", senderId: "faculty", body: "You're on the right track! Keep practising.", sentAt: "2026-06-24T13:45:00Z", seen: false },
-  ],
-  f2: [
-    { id: "m6", senderId: "faculty", body: "I reviewed your behavioral answers. Your Situation and Task sections are strong but the Action section needs more specific details — avoid vague words like 'I helped'. Be specific about what you did.", sentAt: "2026-06-23T09:30:00Z", seen: true },
-    { id: "m7", senderId: "student", body: "Thank you! I'll rewrite those sections. Should I send the revised version to you?", sentAt: "2026-06-23T09:45:00Z", seen: true },
-    { id: "m8", senderId: "faculty", body: "Send me your updated STAR story by tomorrow.", sentAt: "2026-06-23T10:00:00Z", seen: true },
-  ],
-};
 
 function timeAgo(iso: string) {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -81,10 +51,11 @@ function groupByDate(messages: Message[]) {
 }
 
 // ── Sidebar: faculty list ─────────────────────────────
-function FacultyList({ faculty, selected, onSelect }: {
+function FacultyList({ faculty, selected, onSelect, loading }: {
   faculty: Faculty[];
   selected: string;
   onSelect: (id: string) => void;
+  loading: boolean;
 }) {
   const [search, setSearch] = useState("");
   const filtered = faculty.filter((f) => f.name.toLowerCase().includes(search.toLowerCase()));
@@ -108,7 +79,12 @@ function FacultyList({ faculty, selected, onSelect }: {
 
       {/* Faculty rows */}
       <div className="flex-1 overflow-y-auto">
-        {filtered.length === 0 && (
+        {loading && (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 text-gray-300 animate-spin" />
+          </div>
+        )}
+        {!loading && filtered.length === 0 && (
           <p className="text-xs text-gray-400 text-center py-8">No faculty found</p>
         )}
         {filtered.map((f) => (
@@ -133,9 +109,13 @@ function FacultyList({ faculty, selected, onSelect }: {
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1">
                 <span className="text-xs font-semibold text-gray-900 truncate">{f.name}</span>
-                <span className="text-[10px] text-gray-400 shrink-0">{timeAgo(f.lastAt)}</span>
+                {f.lastAt && f.lastAt !== new Date(0).toISOString() && (
+                  <span className="text-[10px] text-gray-400 shrink-0">{timeAgo(f.lastAt)}</span>
+                )}
               </div>
-              <p className="text-[11px] text-gray-400 truncate mt-0.5">{f.lastMessage}</p>
+              <p className="text-[11px] text-gray-400 truncate mt-0.5">
+                {f.lastMessage || f.subject}
+              </p>
             </div>
 
             {/* Unread */}
@@ -153,110 +133,164 @@ function FacultyList({ faculty, selected, onSelect }: {
 
 // ── Chat window ───────────────────────────────────────
 function ChatWindow({ facultyId, faculty }: { facultyId: string; faculty: Faculty }) {
-  const [messages, setMessages] = useState<Message[]>(mockMessages[facultyId] || []);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Fetch messages for this conversation
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/messages/${facultyId}`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => {
+        const msgs: any[] = data?.messages ?? data?.data?.messages ?? [];
+        setMessages(msgs.map((m: any) => ({
+          id: m.id ?? m._id,
+          senderId: m.senderId,
+          body: m.body,
+          sentAt: m.sentAt ?? m.createdAt,
+          seen: m.seen ?? true,
+        })));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [facultyId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-    setMessages((prev) => [...prev, {
-      id: `m${Date.now()}`, senderId: "student",
-      body: input.trim(), sentAt: new Date().toISOString(), seen: false,
-    }]);
+  const handleSend = async () => {
+    if (!input.trim() || sending) return;
+    const body = input.trim();
     setInput("");
+    setSending(true);
+
+    // Optimistic update
+    const optimistic: Message = {
+      id: `tmp-${Date.now()}`,
+      senderId: "student",
+      body,
+      sentAt: new Date().toISOString(),
+      seen: false,
+    };
+    setMessages((prev) => [...prev, optimistic]);
+
+    try {
+      const res = await fetch(`/api/messages/${facultyId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ body }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const saved = data?.data ?? data;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === optimistic.id ? { ...optimistic, id: saved.id } : m))
+        );
+      }
+    } catch {
+      // Keep optimistic message visible — will retry on refresh
+    } finally {
+      setSending(false);
+    }
   };
 
-  const groups = groupByDate(messages);
+  const grouped = groupByDate(messages);
 
   return (
-    <div className="flex flex-col h-full bg-white">
-      {/* Chat header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-200 shrink-0">
-        <div className="relative">
-          <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {faculty.initials}
-          </div>
-          {faculty.online && (
-            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white" />
-          )}
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="px-5 py-3 border-b border-gray-200 bg-white flex items-center gap-3 shrink-0">
+        <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
+          {faculty.initials}
         </div>
         <div>
-          <p className="text-sm font-semibold text-gray-900">{faculty.name}</p>
-          <p className="text-[11px] text-gray-400 flex items-center gap-1">
-            <Circle className={`w-1.5 h-1.5 ${faculty.online ? "fill-green-500 text-green-500" : "fill-gray-300 text-gray-300"}`} />
-            {faculty.online ? "Online" : "Offline"} · {faculty.subject}
-          </p>
+          <p className="text-sm font-bold text-gray-900">{faculty.name}</p>
+          <p className="text-[11px] text-gray-400">{faculty.subject}</p>
         </div>
       </div>
 
-      {/* Messages scroll area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {groups.map(({ dateLabel, messages: groupMsgs }) => (
-          <div key={dateLabel}>
-            {/* Date divider */}
-            <div className="flex items-center gap-3 my-3">
-              <div className="flex-1 h-px bg-gray-100" />
-              <span className="text-[10px] text-gray-400 font-medium shrink-0">{dateLabel}</span>
-              <div className="flex-1 h-px bg-gray-100" />
-            </div>
-
-            <div className="space-y-2">
-              {groupMsgs.map((msg) => {
-                const isMe = msg.senderId === "student";
-                return (
-                  <div key={msg.id} className={`flex gap-2 ${isMe ? "justify-end" : "justify-start"}`}>
-                    {!isMe && (
-                      <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 mt-0.5">
-                        {faculty.initials}
-                      </div>
-                    )}
-                    <div className="max-w-[72%]">
-                      <div className={`px-3 py-2 rounded text-sm leading-relaxed ${
-                        isMe
-                          ? "bg-blue-600 text-white rounded-tr-none"
-                          : "bg-gray-100 text-gray-800 rounded-tl-none"
-                      }`}>
-                        {msg.body}
-                      </div>
-                      <p className={`text-[10px] text-gray-400 mt-0.5 ${isMe ? "text-right" : "text-left"}`}>
-                        {fmtTime(msg.sentAt)}
-                        {isMe && <span className="ml-1">{msg.seen ? "· Seen" : "· Sent"}</span>}
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 bg-gray-50/50">
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-5 h-5 text-gray-300 animate-spin" />
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-sm text-gray-400">No messages yet. Say hello!</p>
+          </div>
+        ) : (
+          grouped.map(({ dateLabel, messages: dayMsgs }) => (
+            <div key={dateLabel}>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="h-px bg-gray-200 flex-1" />
+                <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  {dateLabel}
+                </span>
+                <div className="h-px bg-gray-200 flex-1" />
+              </div>
+              <div className="space-y-2">
+                {dayMsgs.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`flex ${m.senderId === "student" ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`max-w-[72%] px-3.5 py-2 rounded-2xl text-sm leading-relaxed ${
+                        m.senderId === "student"
+                          ? "bg-blue-600 text-white rounded-br-md"
+                          : "bg-white text-gray-800 border border-gray-200 rounded-bl-md"
+                      }`}
+                    >
+                      <p>{m.body}</p>
+                      <p
+                        className={`text-[10px] mt-1 ${
+                          m.senderId === "student" ? "text-blue-200" : "text-gray-400"
+                        }`}
+                      >
+                        {fmtTime(m.sentAt)}
                       </p>
                     </div>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
         <div ref={bottomRef} />
       </div>
 
       {/* Input */}
-      <div className="px-4 py-3 border-t border-gray-200 shrink-0">
+      <div className="px-5 py-3 border-t border-gray-200 bg-white shrink-0">
         <div className="flex items-end gap-2">
-          <div className="flex-1 bg-gray-100 rounded px-3 py-2">
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder="Type a message..."
-              rows={1}
-              className="w-full bg-transparent text-sm text-gray-800 resize-none focus:outline-none leading-5"
-            />
-          </div>
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+            placeholder="Type a message..."
+            rows={1}
+            className="flex-1 resize-none bg-gray-100 border border-transparent focus:border-blue-300 focus:bg-white rounded-xl px-3.5 py-2.5 text-sm focus:outline-none transition-colors"
+          />
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
-            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-              input.trim() ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-gray-200 text-gray-400 cursor-not-allowed"
-            }`}
+            disabled={!input.trim() || sending}
+            className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
           >
-            <Send className="w-3.5 h-3.5" />
+            {sending ? (
+              <Loader2 className="w-4 h-4 text-white animate-spin" />
+            ) : (
+              <Send className="w-4 h-4 text-white" />
+            )}
           </button>
         </div>
       </div>
@@ -264,9 +298,10 @@ function ChatWindow({ facultyId, faculty }: { facultyId: string; faculty: Facult
   );
 }
 
+// ── Empty state ───────────────────────────────────────
 function EmptyState() {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 text-center p-8">
+    <div className="flex-1 flex flex-col items-center justify-center bg-gray-50/50">
       <div className="w-10 h-10 bg-blue-50 border border-blue-100 rounded flex items-center justify-center mb-3">
         <Send className="w-5 h-5 text-blue-300" />
       </div>
@@ -278,17 +313,48 @@ function EmptyState() {
 
 export default function MessagesPage() {
   const [selectedFacultyId, setSelectedFacultyId] = useState<string>("");
-  const selectedFaculty = mockFaculty.find((f) => f.id === selectedFacultyId);
+  const [faculty, setFaculty] = useState<Faculty[]>([]);
+  const [loadingFaculty, setLoadingFaculty] = useState(true);
+
+  // Fetch faculty list on mount
+  useEffect(() => {
+    fetch("/api/messages/faculty", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data) => {
+        const raw: any[] = data?.faculty ?? data?.data?.faculty ?? [];
+        setFaculty(
+          raw.map((f: any) => ({
+            id: f.id ?? f._id,
+            name: f.name ?? f.fullName ?? "Faculty",
+            initials: (f.name ?? f.fullName ?? "F")
+              .split(" ")
+              .map((w: string) => w[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase(),
+            subject: f.subject ?? "Placement Mentor",
+            online: f.online ?? false,
+            lastMessage: f.lastMessage ?? "",
+            lastAt: f.lastAt ?? new Date(0).toISOString(),
+            unread: f.unread ?? 0,
+          }))
+        );
+      })
+      .catch(() => {})
+      .finally(() => setLoadingFaculty(false));
+  }, []);
+
+  const selectedFaculty = faculty.find((f) => f.id === selectedFacultyId);
 
   return (
-    // Escape the parent's px-6 py-6 padding so this fills the content area edge to edge
     <div className="-mx-6 -my-6 flex" style={{ height: "calc(100vh - 56px)" }}>
       {/* Faculty sidebar */}
       <div className="w-64 shrink-0 border-r border-gray-200">
         <FacultyList
-          faculty={mockFaculty}
+          faculty={faculty}
           selected={selectedFacultyId}
           onSelect={setSelectedFacultyId}
+          loading={loadingFaculty}
         />
       </div>
 

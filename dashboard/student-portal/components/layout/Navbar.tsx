@@ -3,23 +3,53 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Bell, Zap, Search, X, Building2, Tag, Menu } from "lucide-react";
-import { UserButton, useUser } from "@clerk/nextjs";
-import { searchAll, type SearchResult } from "@/lib/mock-data";
 import { useNavbar } from "@/lib/navbar-context";
+import { useCompanies, useProfile } from "@/lib/hooks";
 
-// Unread notification count — reads from sessionStorage
+export interface SearchResult {
+  type: "company" | "topic";
+  label: string;
+  subtitle: string;
+  href: string;
+  slug?: string;
+  color?: string;
+  initial?: string;
+}
+
+const STATIC_TOPICS: SearchResult[] = [
+  { type: "topic", label: "Arrays & Strings", subtitle: "89% of Google interviews", href: "/practice?topic=Arrays" },
+  { type: "topic", label: "DP", subtitle: "76% of FAANG interviews", href: "/practice?topic=DP" },
+  { type: "topic", label: "System Design (HLD)", subtitle: "Critical for SDE-2 roles", href: "/practice?roundType=System+Design" },
+  { type: "topic", label: "LLD / Low Level Design", subtitle: "Flipkart, Microsoft", href: "/practice?roundType=LLD" },
+  { type: "topic", label: "Graphs & BFS/DFS", subtitle: "71% of Google interviews", href: "/practice?topic=Graphs" },
+  { type: "topic", label: "Aptitude", subtitle: "TCS NQT, Infosys Spectra", href: "/practice?roundType=Aptitude" },
+  { type: "topic", label: "HR / Behavioral", subtitle: "All companies", href: "/practice?roundType=HR" },
+];
+// Unread notification count — reads from API
 function useUnreadCount() {
   const [count, setCount] = useState(0);
   useEffect(() => {
-    // BACKEND TODO: GET /api/notifications/unread-count
-    setTimeout(() => {
-      const lastRead = sessionStorage.getItem("notifications_last_read");
-      if (!lastRead) {
-        setCount(3); // 3 unread by default for new users
-      } else {
-        setCount(0);
+    // Fetch unread notification count from backend API
+    const fetchUnreadCount = async () => {
+      try {
+        const response = await fetch('/api/notifications/unread-count');
+        if (response.ok) {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.indexOf("application/json") !== -1) {
+            const data = await response.json();
+            setCount(data.unreadCount || 0);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch unread notifications count:', error);
       }
-    }, 0);
+    };
+
+    fetchUnreadCount();
+    
+    // Optional: Poll every 60 seconds
+    const intervalId = setInterval(fetchUnreadCount, 60000);
+    return () => clearInterval(intervalId);
   }, []);
   return count;
 }
@@ -27,7 +57,16 @@ function useUnreadCount() {
 export default function Navbar() {
   const router = useRouter();
   const pathname = usePathname();
-  const { user } = useUser();
+  
+  // Use custom profile hook
+  const { data: profile } = useProfile();
+  const user = profile ? {
+    imageUrl: profile.avatarUrl,
+    fullName: profile.fullName,
+    firstName: profile.fullName?.split(" ")[0],
+    xp: profile.xpTotal
+  } : null;
+
   const { isMobileMenuOpen, setMobileMenuOpen } = useNavbar();
   const [query, setQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -36,10 +75,30 @@ export default function Navbar() {
   const unreadCount = useUnreadCount();
 
   // Derive XP from user metadata (BACKEND TODO: from /api/user/me)
-  const xp = (user?.publicMetadata as { xp?: number })?.xp ?? 2450;
+  const xp = user?.xp ?? 2450;
+
+  const { data: companiesResp } = useCompanies();
+  const allCompanies = companiesResp?.data?.companies || companiesResp?.companies || [];
 
   // Derive results directly from query — no useEffect needed
-  const results = useMemo(() => searchAll(query), [query]);
+  const results = useMemo(() => {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
+    const compResults: SearchResult[] = allCompanies.map((c: any) => ({
+      type: "company",
+      label: c.name,
+      subtitle: `${c.questionsCount || 0} questions · ${c.type || "Company"}`,
+      href: `/companies/${c.slug}`,
+      slug: c.slug,
+      color: c.color || "bg-gray-600",
+      initial: c.name[0],
+    }));
+    return [...compResults, ...STATIC_TOPICS].filter(
+      (r) =>
+        r.label.toLowerCase().includes(q) ||
+        r.subtitle.toLowerCase().includes(q)
+    ).slice(0, 8);
+  }, [query, allCompanies]);
   const open = results.length > 0 && query.trim().length > 0;
 
   // Close dropdown on outside click
@@ -223,16 +282,6 @@ export default function Navbar() {
         </Link>
 
 
-        {/* Clerk User Button — hidden visually but provides sign-out + account management */}
-        <div className="hidden">
-          <UserButton
-            appearance={{
-              elements: {
-                avatarBox: "w-8 h-8",
-              },
-            }}
-          />
-        </div>
       </div>
     </header>
   );

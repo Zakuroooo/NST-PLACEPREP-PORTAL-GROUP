@@ -70,8 +70,8 @@ export function SidebarContent() {
       {/* Bottom section */}
       <div className="border-t border-gray-200 p-3 space-y-1">
         <button
-          onClick={() => {
-            document.cookie = "faculty_authed=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
             window.location.href = "/login";
           }}
           className="w-full group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"

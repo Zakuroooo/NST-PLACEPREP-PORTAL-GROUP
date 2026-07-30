@@ -7,12 +7,10 @@ import {
   ExternalLink, Zap, Play, ChevronRight, BarChart2, ClipboardList,
   Trash2, Timer, Trophy, XCircle, Info
 } from "lucide-react";
+import { toast } from "sonner";
 import { Suspense } from "react";
-import {
-  getUserRoadmapCompanies,
-  removeRoadmapCompany,
-  type UserRoadmapCompany,
-} from "@/lib/mock-data";
+import { useRoadmap, usePractice, useProgress, useCompanies } from "@/lib/hooks";
+import { type UserRoadmapCompany } from "@/lib/constants";
 
 // ─── Company logo map ────────────────────────────────────────────────────────
 const COMPANY_LOGOS: Record<string, string> = {
@@ -58,43 +56,6 @@ function CompanyLogo({
   
   return <span className={`text-base font-bold ${fallbackClass}`}>{initial}</span>;
 }
-
-const EXPLORE_SUGGESTIONS = [
-  {
-    slug: "tcs",
-    name: "TCS",
-    initial: "T",
-    role: "Ninja / Digital",
-    totalXP: 1200,
-    weeks: 6,
-  },
-  {
-    slug: "razorpay",
-    name: "Razorpay",
-    initial: "R",
-    role: "SDE-1",
-    totalXP: 1800,
-    weeks: 8,
-  },
-  {
-    slug: "atlassian",
-    name: "Atlassian",
-    initial: "A",
-    role: "Software Engineer",
-    totalXP: 1500,
-    weeks: 8,
-  },
-  {
-    slug: "netflix",
-    name: "Netflix",
-    initial: "N",
-    role: "SDE",
-    totalXP: 2200,
-    weeks: 10,
-  }
-];
-
-
 
 // ─── Compact Active Roadmap Card ────────────────────────────────────────────
 function ActiveRoadmapCard({
@@ -175,7 +136,7 @@ function ActiveRoadmapCard({
 }
 
 // ─── Compact Explore Roadmap Card ────────────────────────────────────────────
-function ExploreRoadmapCard({ company }: { company: typeof EXPLORE_SUGGESTIONS[0] }) {
+function ExploreRoadmapCard({ company }: { company: any }) {
   const logoUrl = getLogoUrl(company.slug);
 
   return (
@@ -204,34 +165,87 @@ function ExploreRoadmapCard({ company }: { company: typeof EXPLORE_SUGGESTIONS[0
 // ─── Main Roadmap Page Content ───────────────────────────────────────────────
 function RoadmapContent() {
   const searchParams = useSearchParams();
-  const [companies, setCompanies] = useState<UserRoadmapCompany[]>(getUserRoadmapCompanies);
+
+  // Real roadmaps from API
+  const { data: roadmapData, mutate, isLoading } = useRoadmap();
+  const { data: companiesResp } = useCompanies();
+
+  const allCompanies: any[] = Array.isArray(companiesResp) 
+    ? companiesResp 
+    : (companiesResp?.data?.companies ?? companiesResp?.companies ?? []);
+
+  const companies: UserRoadmapCompany[] = (
+    (roadmapData?.data?.roadmaps ?? roadmapData?.roadmaps ?? roadmapData ?? []) as any[]
+  ).map((r: any) => ({
+    slug: r.companySlug,
+    name: r.companyName,
+    initial: r.companyName?.charAt(0) || "?",
+    color: "from-blue-500/20 to-blue-500/5",
+    role: r.roleName,
+    totalWeeks: r.weeksCommitted ?? 12,
+    currentWeek: r.currentWeek ?? 1,
+    pctComplete: r.pctComplete ?? 0,
+    weeks: (r.weeks || r.tasks || []).map((w: any) => ({
+      weekNum: w.weekNumber || w.weekNum,
+      topic: w.topicLabel || w.topic,
+      totalQuestions: w.totalQuestions ?? 5,
+      doneQuestions: w.doneQuestions ?? 0,
+      status: w.status || "active",
+      questions: w.questions || [],
+    })),
+  }));
+
   const initialSlug = searchParams.get("company") ?? companies[0]?.slug ?? "";
   const [activeSlug, setActiveSlug] = useState(initialSlug);
-
-  // Sync state if returned from other pages
-  useEffect(() => {
-    setTimeout(() => {
-      setCompanies(getUserRoadmapCompanies());
-    }, 0);
-  }, []);
 
   useEffect(() => {
     const slug = searchParams.get("company");
     if (slug && companies.some((c) => c.slug === slug)) {
-      setTimeout(() => setActiveSlug(slug), 0);
+      setActiveSlug(slug);
     }
   }, [searchParams, companies]);
 
-  const handleRemove = (slug: string) => {
-    removeRoadmapCompany(slug);
-    const updated = getUserRoadmapCompanies();
-    setCompanies(updated);
+  const exploreSuggestions = allCompanies
+    .filter((c: any) => !companies.some(rm => rm.slug === c.slug))
+    .slice(0, 5)
+    .map((c: any) => ({
+      slug: c.slug,
+      name: c.name,
+      initial: c.name.charAt(0),
+      role: c.type || "SDE",
+      totalXP: (c.questionCount || 0) * 10,
+      weeks: 8,
+    }));
+
+  const handleRemove = async (slug: string) => {
+    try {
+      const res = await fetch(`/api/user/me/roadmap/${slug}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete roadmap');
+      mutate();
+      toast.success("Roadmap removed successfully");
+    } catch {
+      toast.error("Failed to remove roadmap");
+    }
     if (activeSlug === slug) {
-      setActiveSlug(updated[0]?.slug ?? "");
+      const remaining = companies.filter(c => c.slug !== slug);
+      setActiveSlug(remaining[0]?.slug ?? "");
     }
   };
 
   const activeCompany = companies.find((c) => c.slug === activeSlug) ?? companies[0];
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        <div className="h-8 bg-gray-100 rounded-lg w-48 animate-pulse" />
+        <div className="flex gap-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="min-w-[300px] h-52 bg-gray-100 rounded-lg animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   if (!activeCompany || companies.length === 0) {
     return (
@@ -303,11 +317,17 @@ function RoadmapContent() {
       <section className="mt-12">
         <h2 className="text-lg font-semibold text-gray-900 mb-5">Explore More Roadmaps</h2>
         <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-4 -mx-1 px-1">
-          {EXPLORE_SUGGESTIONS.map((co) => (
-            <div key={co.slug}>
-              <ExploreRoadmapCard company={co} />
+          {exploreSuggestions.length > 0 ? (
+            exploreSuggestions.map((co) => (
+              <div key={co.slug}>
+                <ExploreRoadmapCard company={co} />
+              </div>
+            ))
+          ) : (
+            <div className="text-sm text-gray-400 py-4 w-full text-center border-2 border-dashed border-gray-100 rounded-xl">
+              You have explored all available companies!
             </div>
-          ))}
+          )}
         </div>
       </section>
 
@@ -316,6 +336,77 @@ function RoadmapContent() {
         <h2 className="text-lg font-semibold text-gray-900 mb-5 border-t pt-8">Roadmap Curriculum</h2>
         <RoadmapCurriculumView company={activeCompany} />
       </div>
+    </div>
+  );
+}
+
+function WeekQuestions({ companySlug, topic }: { companySlug: string; topic: string }) {
+  const { data: practiceData, isLoading } = usePractice({ company: companySlug, topic });
+  const { data: progressData } = useProgress();
+  
+  const questions = practiceData?.data?.questions ?? practiceData?.questions ?? practiceData ?? [];
+  const completedIds = new Set(
+    (progressData?.data?.completedQuestions ?? progressData?.completedQuestions ?? []).map((q: any) => q.questionId || q.id || q)
+  );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(3)].map((_, i) => (
+          <div key={i} className="h-14 bg-white border border-gray-200 rounded-lg animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (!questions || questions.length === 0) {
+    return (
+      <div className="text-center py-6 text-gray-500 text-sm">
+        No questions found for {topic}.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {questions.map((q: any) => {
+        const isDone = completedIds.has(q._id || q.id);
+        return (
+          <div key={q._id || q.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-colors cursor-pointer group gap-2 sm:gap-4">
+            <div className="flex items-start sm:items-center gap-3 min-w-0">
+              <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${isDone ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
+                {isDone && <CheckCircle className="w-3.5 h-3.5 text-white" />}
+              </div>
+              <span className={`font-semibold text-sm truncate ${isDone ? 'text-gray-400 line-through' : 'text-gray-700 group-hover:text-blue-600'}`}>
+                {q.title}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0 ml-8 sm:ml-0">
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                q.diff === 'Easy' ? 'bg-green-50 text-green-700 border-green-200' :
+                q.diff === 'Medium' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                'bg-red-50 text-red-700 border-red-200'
+              }`}>
+                {q.diff}
+              </span>
+              <span className="text-xs font-bold text-orange-500 flex items-center gap-0.5">
+                +{q.xp} XP
+              </span>
+              <a 
+                href={q.leetcodeUrl || '#'} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-blue-500 hover:text-blue-700 p-1 rounded-md hover:bg-blue-50 transition-colors"
+                aria-label={`Open ${q.title} on LeetCode`}
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -384,7 +475,7 @@ function RoadmapCurriculumView({ company }: { company: UserRoadmapCompany }) {
       {/* Curriculum List */}
       <div className="space-y-4">
         {company.weeks.map((week) => {
-          const isExpanded = expandedWeek === week.weekNumber;
+          const isExpanded = expandedWeek === week.weekNum;
           const isDone = week.status === "done";
           const isActive = week.status === "active";
           const isLocked = week.status === "locked";
@@ -392,7 +483,7 @@ function RoadmapCurriculumView({ company }: { company: UserRoadmapCompany }) {
 
           return (
             <div 
-              key={week.weekNumber} 
+              key={week.weekNum} 
               className={`border rounded-xl bg-white overflow-hidden transition-all ${
                 isActive ? 'border-blue-200 shadow-sm' : 'border-gray-200'
               }`}
@@ -400,7 +491,7 @@ function RoadmapCurriculumView({ company }: { company: UserRoadmapCompany }) {
               <div 
                 className={`p-5 flex items-center justify-between cursor-pointer hover:bg-gray-50/50 ${isLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                 onClick={() => {
-                  if (!isLocked) setExpandedWeek(isExpanded ? null : week.weekNumber);
+                  if (!isLocked) setExpandedWeek(isExpanded ? null : week.weekNum);
                 }}
               >
                 <div className="flex items-center gap-4">
@@ -413,7 +504,7 @@ function RoadmapCurriculumView({ company }: { company: UserRoadmapCompany }) {
                       <span className={`text-[10px] font-bold uppercase tracking-wider ${
                         isDone ? 'text-gray-500' : isActive ? 'text-blue-600' : 'text-gray-400'
                       }`}>
-                        WEEK {week.weekNumber}
+                        WEEK {week.weekNum}
                       </span>
                       {isActive && (
                         <span className="bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase">
@@ -454,42 +545,7 @@ function RoadmapCurriculumView({ company }: { company: UserRoadmapCompany }) {
 
               {isExpanded && !isLocked && (
                 <div className="border-t border-gray-100 bg-gray-50/30 p-5">
-                  <div className="space-y-3">
-                    {week.questions.map((q) => (
-                      <div key={q.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-colors cursor-pointer group gap-2 sm:gap-4">
-                        <div className="flex items-start sm:items-center gap-3 min-w-0">
-                          <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${q.done ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
-                            {q.done && <CheckCircle className="w-3.5 h-3.5 text-white" />}
-                          </div>
-                          <span className={`font-semibold text-sm truncate ${q.done ? 'text-gray-400 line-through' : 'text-gray-700 group-hover:text-blue-600'}`}>
-                            {q.title}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-3 shrink-0 ml-8 sm:ml-0">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                            q.diff === 'Easy' ? 'bg-green-50 text-green-700 border-green-200' :
-                            q.diff === 'Medium' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-                            'bg-red-50 text-red-700 border-red-200'
-                          }`}>
-                            {q.diff}
-                          </span>
-                          <span className="text-xs font-bold text-orange-500 flex items-center gap-0.5">
-                            +{q.xp}
-                          </span>
-                          <a 
-                            href={q.leetcodeUrl || '#'} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-blue-500 hover:text-blue-700 p-1 rounded-md hover:bg-blue-50 transition-colors"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                  <WeekQuestions companySlug={company.slug} topic={week.topic} />
                 </div>
               )}
             </div>

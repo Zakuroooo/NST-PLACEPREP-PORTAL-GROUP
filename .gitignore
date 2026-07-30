@@ -6,3 +6,7 @@
 **/dist
 **/build
 **/.next
+.env
+.env.*
+**/.env
+**/.env.*

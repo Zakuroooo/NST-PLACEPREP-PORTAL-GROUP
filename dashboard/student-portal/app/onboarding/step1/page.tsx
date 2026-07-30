@@ -74,7 +74,14 @@ export default function Step1() {
           </div>
 
           <button
-            onClick={() => selected.length > 0 && router.push("/onboarding/step2")}
+            onClick={() => {
+              if (selected.length > 0) {
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem("onboarding_domains", JSON.stringify(selected));
+                }
+                router.push("/onboarding/step2");
+              }
+            }}
             disabled={selected.length === 0}
             className={`w-full py-3 rounded-lg text-sm font-semibold transition-colors ${selected.length > 0 ? "bg-gray-900 text-white hover:bg-gray-800" : "bg-gray-100 text-gray-400 cursor-not-allowed"}`}
           >

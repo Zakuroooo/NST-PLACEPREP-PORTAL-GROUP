@@ -1,0 +1,15 @@
+{
+  "name": "nst-prepportal-root",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "dashboard/*"
+  ],
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/uuid": "^10.0.0"
+  },
+  "dependencies": {
+    "pino": "^10.3.1"
+  }
+}

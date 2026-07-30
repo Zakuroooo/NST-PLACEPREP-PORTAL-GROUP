@@ -83,7 +83,9 @@ export default function OverviewPage() {
     <div className="space-y-5">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Good morning, Admin.</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+        {(() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; })()}, Admin.
+      </h1>
         <p className="text-sm text-gray-500 mt-0.5">Platform overview — {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p>
       </div>
 
@@ -151,7 +153,10 @@ export default function OverviewPage() {
         <div className="lg:col-span-2 bg-white border border-gray-100 rounded-xl p-4 shadow-sm">
           <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-900">Sessions per Week</h3>
-            <button className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
+            <button
+              onClick={() => { window.open(`/api/admin/reports?type=system-utilization&format=csv`); }}
+              className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+            >
               <Download className="w-4 h-4" /> Export CSV
             </button>
           </div>
@@ -192,9 +197,9 @@ export default function OverviewPage() {
             </div>
             <div className="w-full space-y-2">
               {[
-                { label: "Placed",      pct: "68%", color: "bg-blue-600" },
-                { label: "In Progress", pct: "20%", color: "bg-indigo-400" },
-                { label: "Not Started", pct: "12%", color: "bg-slate-300" },
+                { label: "Placed",      pct: `${stats.totalStudents > 0 ? Math.round((stats.placedStudents / stats.totalStudents) * 100) : 0}%`, color: "bg-blue-600" },
+                { label: "In Progress", pct: `${stats.totalStudents > 0 ? Math.round((stats.inProgressStudents / stats.totalStudents) * 100) : 0}%`, color: "bg-indigo-400" },
+                { label: "Not Started", pct: `${stats.totalStudents > 0 ? Math.max(0, 100 - Math.round((stats.placedStudents / stats.totalStudents) * 100) - Math.round((stats.inProgressStudents / stats.totalStudents) * 100)) : 0}%`, color: "bg-slate-300" },
               ].map((item) => (
                 <div key={item.label} className="flex justify-between items-center text-sm">
                   <div className="flex items-center gap-2">
@@ -267,7 +272,7 @@ export default function OverviewPage() {
               </div>
               <div>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Req / min</p>
-                <span className="text-2xl font-bold">{Math.round(stats.activeUsers * 0.4).toLocaleString()}</span>
+                <span className="text-2xl font-bold">{(stats.requestsPerMinute ?? 0).toLocaleString()}</span>
               </div>
             </div>
             <div>
@@ -284,12 +289,28 @@ export default function OverviewPage() {
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Uptime</p>
-                <span className="text-2xl font-bold text-emerald-400">99.98%</span>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Server Status</p>
+                <span className={`text-2xl font-bold ${
+                  stats.serverLoad > 80 ? "text-red-400" :
+                  stats.serverLoad > 60 ? "text-amber-400" :
+                  "text-emerald-400"
+                }`}>
+                  {stats.serverLoad > 80 ? "Degraded" : stats.serverLoad > 60 ? "Elevated" : "Operational"}
+                </span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">All Systems OK</span>
+                <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                  stats.serverLoad > 80 ? "bg-red-400" :
+                  stats.serverLoad > 60 ? "bg-amber-400" :
+                  "bg-emerald-400"
+                }`} />
+                <span className={`text-xs font-bold uppercase tracking-wider ${
+                  stats.serverLoad > 80 ? "text-red-400" :
+                  stats.serverLoad > 60 ? "text-amber-400" :
+                  "text-emerald-400"
+                }`}>
+                  {stats.serverLoad > 80 ? "High Load" : stats.serverLoad > 60 ? "Moderate Load" : "All Systems OK"}
+                </span>
               </div>
             </div>
           </div>
@@ -329,9 +350,9 @@ export default function OverviewPage() {
           <div className="p-5 grid grid-cols-2 gap-5">
             {[
               { icon: Users,    label: "Active Users",   value: stats?.activeUsers?.toLocaleString() ?? "—",    sub: "online now",  color: "text-blue-400" },
-              { icon: Zap,      label: "Requests / min", value: stats ? Math.round(stats.activeUsers * 0.4).toLocaleString() : "—", sub: "avg load", color: "text-indigo-400" },
-              { icon: Cpu,      label: "Server Load",    value: `${stats?.serverLoad ?? 0}%`,   sub: "cpu utilisation", color: "text-cyan-400" },
-              { icon: HardDrive,label: "Uptime",          value: "99.98%", sub: "last 30 days", color: "text-emerald-400" },
+              { icon: Zap,      label: "Requests / min", value: (stats?.requestsPerMinute ?? 0).toLocaleString(), sub: "last 60 sec (real)", color: "text-indigo-400" },
+              { icon: Cpu,      label: "Server Load",    value: `${stats?.serverLoad ?? 0}%`,   sub: "active user density", color: "text-cyan-400" },
+              { icon: HardDrive,label: "Uptime",          value: "N/A", sub: "APM integration needed", color: "text-gray-400" },
             ].map(m => (
               <div key={m.label} className="bg-gray-900 rounded-xl p-5.5 border border-gray-800">
                 <div className="flex items-center gap-2 mb-2">
@@ -344,10 +365,10 @@ export default function OverviewPage() {
             ))}
           </div>
 
-          {/* Server Load bar */}
+          {/* Server Load bar — single display, no duplication */}
           <div className="px-5 pb-3">
             <div className="flex justify-between text-xs font-semibold text-gray-500 mb-1">
-              <span>CPU Load</span>
+              <span>Server Load</span>
               <span>{stats?.serverLoad ?? 0}%</span>
             </div>
             <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
@@ -361,21 +382,37 @@ export default function OverviewPage() {
             </div>
           </div>
 
-          {/* Log terminal */}
+          {/* Log terminal — driven by real backend stats */}
           <div className="mx-5 mb-5 bg-black rounded-xl border border-gray-800 p-5 font-mono text-xs space-y-1 h-28 overflow-y-auto">
-            {[
-              { t: "10:14:02", msg: "[INFO]  Student session started — user#4821", c: "text-emerald-400" },
-              { t: "10:14:05", msg: "[INFO]  Doubt submitted — DSA topic", c: "text-blue-400" },
-              { t: "10:14:09", msg: "[INFO]  Faculty booking confirmed — slot#99", c: "text-indigo-400" },
-              { t: "10:14:12", msg: "[WARN]  Response time >500ms on /api/leaderboard", c: "text-amber-400" },
-              { t: "10:14:18", msg: "[INFO]  Roadmap checkpoint saved — user#3217", c: "text-emerald-400" },
-              { t: "10:14:21", msg: "[INFO]  Notification dispatched — batch 2025", c: "text-cyan-400" },
-            ].map((line, i) => (
-              <div key={i} className="flex gap-2">
-                <span className="text-gray-600 shrink-0">{line.t}</span>
-                <span className={line.c}>{line.msg}</span>
-              </div>
-            ))}
+            {(() => {
+              if (!stats) return null;
+              const now = Date.now();
+              // Build real log lines from actual backend data
+              const lines: { msg: string; c: string; offset: number }[] = [
+                { msg: `[INFO]  Active users online: ${stats.activeUsers}`, c: "text-emerald-400", offset: 0 },
+                { msg: `[INFO]  Sessions booked this week: ${stats.sessionsBooked}`, c: "text-blue-400", offset: 4000 },
+                { msg: `[INFO]  Pending doubts in queue: ${stats.pendingDoubts ?? stats.doubtsRaised}`, c: "text-indigo-400", offset: 8000 },
+                { msg: `[INFO]  Avg satisfaction score: ${stats.avgSatisfaction?.toFixed(2) ?? 'N/A'} / 5`, c: "text-cyan-400", offset: 12000 },
+                {
+                  msg: stats.serverLoad > 60
+                    ? `[WARN]  Server load elevated: ${stats.serverLoad}%`
+                    : `[INFO]  Server load normal: ${stats.serverLoad}%`,
+                  c: stats.serverLoad > 60 ? "text-amber-400" : "text-emerald-400",
+                  offset: 16000,
+                },
+                { msg: `[INFO]  Placed students: ${stats.placedStudents} (${stats.placementRate}%)`, c: "text-emerald-400", offset: 20000 },
+              ];
+              return lines.map((line, i) => {
+                const t = new Date(now - line.offset);
+                const ts = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
+                return (
+                  <div key={i} className="flex gap-2">
+                    <span className="text-gray-600 shrink-0">{ts}</span>
+                    <span className={line.c}>{line.msg}</span>
+                  </div>
+                );
+              });
+            })()}
           </div>
 
           {/* Footer */}

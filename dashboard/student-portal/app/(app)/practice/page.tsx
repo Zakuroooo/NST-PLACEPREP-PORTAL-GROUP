@@ -6,14 +6,8 @@ import { ArrowLeft, ExternalLink, Search, X, Monitor, Building, Calculator, User
 const IconMap: Record<string, React.ElementType> = {
   Monitor, Building, Calculator, Users, Zap, GraduationCap, Target, FileText
 };
-import {
-  practiceCategories,
-  filterQuestions,
-  allTopics,
-  allCompanySlugs,
-  type PracticeCategory,
-  type Difficulty,
-} from "@/lib/mock-data";
+import { usePractice, useCompanies } from "@/lib/hooks";
+import { practiceCategories, allTopics, type PracticeCategory, type Difficulty } from "@/lib/constants";
 
 // ── Difficulty badge colours ─────────────────────────
 const diffBadge = (d: string) =>
@@ -98,18 +92,46 @@ function PracticeContent() {
 
   const activeCat = practiceCategories.find((c) => c.id === activeCategory);
 
-  // Filter questions based on active category + user filters
+  // Fetch questions from real API using SWR
+  const { data: practiceData } = usePractice({
+    topic,
+    difficulty,
+    company,
+  });
+  
+  const { data: companiesData } = useCompanies();
+  const allCompanySlugs = companiesData?.data?.companies ?? companiesData?.companies ?? [];
+  const rawQuestions = practiceData?.data?.questions ?? practiceData?.questions ?? [];
+
+  // Map backend field names → UI field names
+  // Backend: problemSummary, difficulty, xpValue, companySlugs, topicTag
+  // UI reads: title, diff, xp, companies, topic
+  const allQuestions = rawQuestions.map((q: any) => ({
+    ...q,
+    id:        q._id ?? q.id,
+    title:     q.title     ?? q.problemSummary ?? '',
+    diff:      q.diff      ?? q.difficulty     ?? '',
+    xp:        q.xp        ?? q.xpValue        ?? 0,
+    topic:     q.topic     ?? q.topicTag       ?? '',
+    companies: q.companies ?? q.companySlugs   ?? [],
+    hot:       q.hot       ?? q.isHot          ?? false,
+    leetcodeUrl: q.leetcodeUrl ?? q.externalUrl ?? null,
+  }));
+
+  // Filter questions based on active category + search filter locally
   const filteredQuestions = useMemo(() => {
     if (!activeCat) return [];
-    const qs = filterQuestions({
-      company: company || undefined,
-      topic: topic || undefined,
-      difficulty: difficulty || undefined,
-      search: search || undefined,
-    });
+    let qs = [...allQuestions];
+    
+    // Search text filter
+    if (search.trim()) {
+      const qLower = search.toLowerCase();
+      qs = qs.filter(q => q.title?.toLowerCase().includes(qLower));
+    }
+    
     // Keep only questions matching this category's roundTypes
-    return qs.filter((q) => activeCat.roundTypes.includes(q.roundType));
-  }, [activeCat, company, topic, difficulty, search]);
+    return qs.filter((q: any) => activeCat.roundTypes.includes(q.roundType));
+  }, [activeCat, rawQuestions, search]);
 
   const handleSelectCategory = (id: string) => {
     setActiveCategory((prev) => (prev === id ? null : id));
@@ -195,7 +217,7 @@ function PracticeContent() {
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-gray-700"
             >
               <option value="">All Companies</option>
-              {allCompanySlugs.map((c) => (
+              {allCompanySlugs.map((c: any) => (
                 <option key={c.slug} value={c.slug}>{c.name}</option>
               ))}
             </select>
@@ -255,7 +277,7 @@ function PracticeContent() {
                     <div className="font-medium text-sm text-gray-900 truncate">{q.title}</div>
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                       <span className="text-xs text-gray-500">{q.topic}</span>
-                      {q.companies.slice(0, 2).map((co) => (
+                      {q.companies?.slice(0, 2).map((co: any) => (
                         <span key={co} className="text-xs bg-gray-100 text-gray-600 rounded px-1.5 py-0.5 capitalize">
                           {co}
                         </span>

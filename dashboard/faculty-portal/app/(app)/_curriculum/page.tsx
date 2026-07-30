@@ -8,7 +8,6 @@ export default function CurriculumPage() {
 
 // import { useState, useEffect } from "react";
 // import { ChevronDown, Upload, Download, AlertTriangle, Scale, CheckCircle, X } from "lucide-react";
-// import { mockCurriculumCoverage, computeOverall } from "@/lib/mock-data";
 
 // function getColorClass(val: number) {
 //   if (val < 40) return "bg-red-50 text-red-600 border border-red-200";

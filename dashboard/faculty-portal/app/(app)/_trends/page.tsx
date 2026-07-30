@@ -9,7 +9,6 @@ export default function CurriculumPage() {
 // import { useState, useEffect } from "react";
 // import { Radar, TrendingUp, TrendingDown, Minus } from "lucide-react";
 // import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-// import { mockTrendAlerts } from "@/lib/mock-data";
 
 // const chartData = [
 //   { month: "Jan", "System Design": 30, "Dynamic Programming": 65, "SQL": 40 },

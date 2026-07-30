@@ -1,7 +1,7 @@
 "use client";
 
 import { FileText, Download, Play, CheckCircle2, History, Loader2 } from "lucide-react";
-import { mockReportHistory as initialReportHistory } from "@/lib/mock-data";
+
 import { useState, useEffect } from "react";
 
 export default function ReportsPage() {
@@ -12,7 +12,7 @@ export default function ReportsPage() {
     subjectBreakdown: false
   });
 
-  const [reportHistory, setReportHistory] = useState(initialReportHistory);
+  const [reportHistory, setReportHistory] = useState<any[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,7 +47,8 @@ export default function ReportsPage() {
           month: "short",
           day: "numeric",
           year: "numeric"
-        })
+        }),
+        sections: { ...sections }
       };
 
       setReportHistory(prev => [newReport, ...prev]);
@@ -57,35 +58,25 @@ export default function ReportsPage() {
     }, 1500);
   };
 
-  const handleDownload = (reportName: string) => {
-    const reportText = `========================================================================
-NEWTON SCHOOL OF TECHNOLOGY (NST)
-PLACEPREP PORTAL - CURRICULUM INTELLIGENCE REPORT
-========================================================================
-Report Name:   ${reportName}
-Export Type:   Faculty Audit Export (PDF Format Simulation)
-Generated At:  ${new Date().toLocaleString()}
-
-SECTIONS COVERED:
-------------------------------------------------------------------------
-- Curriculum Gap Matrix:       ${sections.gapMatrix ? "INCLUDED" : "EXCLUDED"}
-- Industry Trends Breakdown:   ${sections.industryTrends ? "INCLUDED" : "EXCLUDED"}
-- Company Rankings & Scores:   ${sections.companyRankings ? "INCLUDED" : "EXCLUDED"}
-- Course Syllabus Diagnostics: ${sections.subjectBreakdown ? "INCLUDED" : "EXCLUDED"}
-
-------------------------------------------------------------------------
-STATUS: VERIFIED
-Authorized by: Prof. Sharma
-Newton School of Technology Academic Planning Unit
-========================================================================`;
-
-    const blob = new Blob([reportText], { type: "text/plain" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `${reportName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}_export.txt`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (reportName: string, selectedSections: any) => {
+    try {
+      const res = await fetch('/api/faculty/reports/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections: selectedSections })
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `${reportName.toLowerCase().replace(/[^a-z0-9]+/g, "_")}_export.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to download report.');
+    }
   };
 
   const SECTION_CONFIG = [
@@ -225,10 +216,10 @@ Newton School of Technology Academic Planning Unit
                       </div>
                       <p className="font-bold text-gray-900 mb-3 text-sm leading-snug">{report.name}</p>
                       <button
-                        onClick={() => handleDownload(report.name)}
+                        onClick={() => handleDownload(report.name, report.sections)}
                         className="w-full text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 font-semibold text-xs py-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                       >
-                        <Download className="w-3.5 h-3.5" /> Download PDF
+                        <Download className="w-3.5 h-3.5" /> Download CSV
                       </button>
                     </div>
                   ))}

@@ -1,7 +1,10 @@
 "use client";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Rocket, CheckCircle, Zap, Calendar } from "lucide-react";
+import { Rocket, CheckCircle, Zap, Calendar, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import Stepper from "@/components/onboarding/Stepper";
+import { submitOnboarding } from "@/lib/hooks";
 
 const readyItems = [
   "Custom roadmap based on your timeline and goals",
@@ -12,31 +15,46 @@ const readyItems = [
 
 export default function Step4() {
   const router = useRouter();
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleLaunch = () => {
-    // BACKEND TODO: POST /api/user/me/onboarding/complete
+  const handleLaunch = async () => {
+    setSubmitting(true);
     try {
-      const storedCompanies = sessionStorage.getItem("onboarding_companies");
-      if (storedCompanies) {
-        const companies: string[] = JSON.parse(storedCompanies);
-        const companyData: Record<string, { name: string; initial: string; color: string }> = {
-          google:    { name: "Google",    initial: "G", color: "bg-blue-600" },
-          amazon:    { name: "Amazon",    initial: "A", color: "bg-blue-500" },
-          flipkart:  { name: "Flipkart",  initial: "F", color: "bg-blue-500" },
-          microsoft: { name: "Microsoft", initial: "M", color: "bg-blue-600" },
-          tcs:       { name: "TCS",       initial: "T", color: "bg-blue-600" },
-          razorpay:  { name: "Razorpay",  initial: "R", color: "bg-blue-800" },
-        };
-        const roadmapEntries = companies
-          .filter((slug) => companyData[slug])
-          .map((slug) => ({ slug, ...companyData[slug], role: "SDE-1", weeks: 12, addedAt: new Date().toISOString() }));
-        if (roadmapEntries.length > 0) {
-          sessionStorage.setItem("roadmap_companies", JSON.stringify(roadmapEntries));
-        }
-      }
+      // Read data collected across steps from sessionStorage
+      const targetDomains = JSON.parse(sessionStorage.getItem("onboarding_domains") || '["SDE / Software Engineering"]');
+      const targetCategories = JSON.parse(sessionStorage.getItem("onboarding_categories") || '["product"]');
+      const targetCompanySlugs = JSON.parse(sessionStorage.getItem("onboarding_companies") || '["google", "amazon"]');
+      const topicSelfRatings = JSON.parse(sessionStorage.getItem("onboarding_ratings") || "{}");
+      const prepWeeksCommitted = parseInt(sessionStorage.getItem("onboarding_weeks") || "12", 10);
+
+      await submitOnboarding({
+        targetDomains,
+        targetCategories,
+        topicSelfRatings,
+        targetCompanySlugs: targetCompanySlugs.length ? targetCompanySlugs : ["google"], // Fallback if empty
+        prepWeeksCommitted,
+      });
+
+      // Clear session storage to prevent stale data
+      sessionStorage.removeItem("onboarding_domains");
+      sessionStorage.removeItem("onboarding_categories");
+      sessionStorage.removeItem("onboarding_companies");
+      sessionStorage.removeItem("onboarding_ratings");
+      sessionStorage.removeItem("onboarding_weeks");
+      
+      // Force cache invalidation so the new profile loads
+      const { mutate } = await import('swr');
+      await mutate('/api/user/me');
+
       sessionStorage.setItem("has_onboarded", "true");
-    } catch { /* sessionStorage might not be available */ }
-    router.push("/dashboard");
+      toast.success("Roadmap created! Welcome to PlacePrep.");
+    } catch (err: any) {
+      // Non-blocking — still proceed to dashboard so user isn't stuck
+      toast.error(err?.message ?? "Could not save profile. You can update it later.");
+    } finally {
+      setSubmitting(false);
+      router.push("/dashboard");
+    }
   };
 
   return (
@@ -101,9 +119,14 @@ export default function Step4() {
 
           <button
             onClick={handleLaunch}
-            className="w-full bg-gray-900 text-white py-3 rounded-lg text-sm font-bold hover:bg-gray-800 transition-colors flex items-center justify-center gap-2"
+            disabled={submitting}
+            className="w-full bg-gray-900 text-white py-3 rounded-lg text-sm font-bold hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Rocket className="w-4 h-4" /> Launch My Dashboard
+            {submitting ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> Setting up your roadmap...</>
+            ) : (
+              <><Rocket className="w-4 h-4" /> Launch My Dashboard</>
+            )}
           </button>
         </div>
       </div>
