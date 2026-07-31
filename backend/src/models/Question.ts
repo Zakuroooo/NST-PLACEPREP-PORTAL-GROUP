@@ -20,6 +20,13 @@ export interface IQuestion extends Document {
   sourceUrl?: string;
   leetcodeUrl?: string;
   frequencyScore: number;
+  companyFrequency: Array<{
+    companySlug: string;
+    frequency: number;
+    askedCount: number;
+  }>;
+  targetRoles: string[];
+  interviewYear?: number;
   xpValue: number;
   isHot: boolean;
   verified: boolean;
@@ -63,6 +70,20 @@ const QuestionSchema = new Schema<IQuestion>(
     sourceUrl: { type: String },
     leetcodeUrl: { type: String },
     frequencyScore: { type: Number, default: 0, min: 0, max: 1 },
+    companyFrequency: [
+      {
+        companySlug: String,
+        frequency: { type: Number, min: 0, max: 1 },
+        askedCount: Number,
+      }
+    ],
+    targetRoles: {
+      type: [String],
+      enum: ['SDE-1', 'SDE-2', 'SDE-3', 'Data Analyst', 'Product Manager', 'DevOps', 'ML Engineer', 'QA'],
+      default: ['SDE-1', 'SDE-2'],
+      index: true,
+    },
+    interviewYear: { type: Number },
     xpValue: { type: Number, default: 10 },
     isHot: { type: Boolean, default: false },
     verified: { type: Boolean, default: false },
@@ -80,6 +101,7 @@ QuestionSchema.index({ companySlug: 1, difficulty: 1 });
 QuestionSchema.index({ topics: 1 });
 QuestionSchema.index({ problemSummary: 'text' }); // full-text search
 QuestionSchema.index({ frequencyScore: -1 }); // for sorting by frequency
+QuestionSchema.index({ targetRoles: 1 });
 
 const Question: Model<IQuestion> =
   mongoose.models.Question || mongoose.model<IQuestion>('Question', QuestionSchema);

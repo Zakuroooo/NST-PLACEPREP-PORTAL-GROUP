@@ -5,6 +5,16 @@ import { useProgress, useDashboard, useRoadmap } from "@/lib/hooks";
 
 // The components will use API data directly below
 
+function timeAgo(date: string | Date) {
+  const diff = Date.now() - new Date(date).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} mins ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hours ago`;
+  return `${Math.floor(hrs / 24)} days ago`;
+}
+
 // Build a proper GitHub-style 52-week heatmap
 // Using current date to calculate which month each cell belongs to
 function buildHeatmap(activityMap: any[]) {
@@ -91,7 +101,7 @@ export default function ProgressPage() {
       pct: pct,
       done: done,
       total: total,
-      last: rm.lastActive ? new Date(rm.lastActive).toLocaleDateString() : "Just now",
+      last: rm.lastActive ? timeAgo(rm.lastActive) : "Just now",
       trend: pct === 100 ? "Ready" : "In Progress",
       trendColor: pct === 100 ? "text-green-600" : "text-blue-600"
     };
@@ -116,7 +126,7 @@ export default function ProgressPage() {
     topic: t.name,
     pct: t.pct,
     companies: companyReadiness[0]?.name || "Top Companies",
-    companyPct: 100 - t.pct, // derived probability dynamically
+    companyPct: Math.round(100 - (t.pct * 0.4)), // Derived inverse probability
     color: t.textColor,
     bgColor: bgColors[idx % bgColors.length]
   }));
@@ -130,7 +140,7 @@ export default function ProgressPage() {
         {[
           { icon: TrendingUp, color: "text-blue-600",   bg: "bg-blue-50",   val: kpis.problemsSolved || 0,    label: "Problems Solved"  },
           { icon: Flame,      color: "text-indigo-600", bg: "bg-indigo-50", val: kpis.currentStreakDays || 0,    label: "Day Streak"       },
-          { icon: Trophy,     color: "text-violet-600", bg: "bg-violet-50", val: Math.max(kpis.currentStreakDays || 0, 5), label: "Best Streak"      }, // 5 is mock baseline
+          { icon: Trophy,     color: "text-violet-600", bg: "bg-violet-50", val: kpis.bestStreakDays || kpis.currentStreakDays || 0, label: "Best Streak"      },
           { icon: Zap,        color: "text-cyan-600",   bg: "bg-cyan-50",   val: (kpis.xpTotal || 0).toLocaleString(), label: "XP Earned"        },
         ].map(({ icon: Icon, color, bg, val, label }) => (
           <div key={label} className={`flex items-center gap-4 px-5 py-4 bg-white border border-gray-200 rounded-xl shadow-sm`}>

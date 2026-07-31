@@ -41,14 +41,8 @@ export default function ManageFacultyPage() {
   const total: number = data?.data?.total ?? data?.total ?? 0;
   const totalPages = Math.ceil(total / itemsPerPage);
 
-  // Local filter on fetched page
-  const paginated = useMemo(() => {
-    return faculty.filter(
-      (f) =>
-        (f.fullName ?? f.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (f.email ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [faculty, searchQuery]);
+  // The API already handles pagination and search filtering.
+  const paginated = faculty;
 
   // Modal states
   const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
@@ -314,7 +308,7 @@ export default function ManageFacultyPage() {
               <button onClick={() => setIsAddModalOpen(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
                 Cancel
               </button>
-              <button onClick={submitNewFaculty} disabled={!newFaculty.name || !newFaculty.email} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              <button onClick={submitNewFaculty} disabled={!newFaculty.name || !newFaculty.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newFaculty.email)} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                 Send Invitation
               </button>
             </div>
@@ -373,7 +367,7 @@ export default function ManageFacultyPage() {
             </div>
             <h2 className="text-lg font-bold text-gray-900 text-center mb-2">Remove Faculty?</h2>
             <p className="text-sm text-gray-500 text-center mb-6">
-              This action will remove {"the selected faculty member"} from the faculty list. This cannot be undone.
+              This action will remove <span className="font-semibold text-gray-800">{faculty.find(f => (f._id ?? f.id) === removingFacultyId)?.fullName ?? faculty.find(f => (f._id ?? f.id) === removingFacultyId)?.name ?? 'the selected faculty member'}</span> from the faculty list. This cannot be undone.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setRemovingFacultyId(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">

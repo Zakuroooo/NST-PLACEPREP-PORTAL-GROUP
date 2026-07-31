@@ -165,6 +165,18 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
   if (isLoading) return <div className="p-8 text-center text-gray-500">Loading company details...</div>;
   if (!company) return <div className="p-8 text-center text-red-500">Company not found</div>;
 
+  const totalCircumference = 2 * Math.PI * 35;
+  const easyPct = company.difficultyDistribution?.Easy || 0;
+  const mediumPct = company.difficultyDistribution?.Medium || 0;
+  const hardPct = company.difficultyDistribution?.Hard || 0;
+  const totalDistribution = easyPct + mediumPct + hardPct || 1;
+  
+  const easyVal = (easyPct / totalDistribution) * totalCircumference;
+  const mediumVal = (mediumPct / totalDistribution) * totalCircumference;
+  const hardVal = (hardPct / totalDistribution) * totalCircumference;
+  
+  const majorityLabel = Math.max(easyPct, mediumPct, hardPct) === easyPct ? "Easy" : Math.max(easyPct, mediumPct, hardPct) === mediumPct ? "Medium" : "Hard";
+
   const intel = {
     hiringStatus: company.hiringStatus || "Active Hiring",
     avgProcess: company.avgProcessWeeks ? `${company.avgProcessWeeks} Weeks` : "3-4 Weeks",
@@ -396,12 +408,12 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
             <div className="flex items-center justify-center">
               <div className="relative w-28 h-28">
                 <svg viewBox="0 0 100 100" className="w-28 h-28 -rotate-90">
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#10B981" strokeWidth="18" strokeDasharray="11 283" />
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#F59E0B" strokeWidth="18" strokeDasharray="71 283" strokeDashoffset="-11" />
-                  <circle cx="50" cy="50" r="35" fill="none" stroke="#EF4444" strokeWidth="18" strokeDasharray="155 283" strokeDashoffset="-82" />
+                  <circle cx="50" cy="50" r="35" fill="none" stroke="#10B981" strokeWidth="18" strokeDasharray={`${easyVal} ${totalCircumference}`} strokeDashoffset={0} />
+                  <circle cx="50" cy="50" r="35" fill="none" stroke="#F59E0B" strokeWidth="18" strokeDasharray={`${mediumVal} ${totalCircumference}`} strokeDashoffset={-easyVal} />
+                  <circle cx="50" cy="50" r="35" fill="none" stroke="#EF4444" strokeWidth="18" strokeDasharray={`${hardVal} ${totalCircumference}`} strokeDashoffset={-(easyVal + mediumVal)} />
                 </svg>
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-base font-bold text-gray-900">Hard</span>
+                  <span className="text-base font-bold text-gray-900">{majorityLabel}</span>
                   <span className="text-xs text-gray-400">MAJORITY</span>
                 </div>
               </div>

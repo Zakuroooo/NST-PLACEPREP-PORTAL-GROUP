@@ -49,6 +49,15 @@ export function useStudents(page = 1, limit = 10, search = "", batch = "") {
   return { students, total, isLoading, isError: !!error, mutate };
 }
 
+// ─── Student Platform-wide Stats (for KPI strip) ─────────────────
+// Fetches aggregated stats for ALL students, not just the current page.
+// Used by the Students page KPI strip to show accurate placed/avg counts.
+export function useStudentStats() {
+  const { data, error, isLoading } = useSWR('/api/admin/students/stats', fetcher);
+  return { data, isLoading, isError: !!error };
+}
+
+
 // ─── Student Detail ──────────────────────────────────────────────
 export function useStudent(id: string | null) {
   const { data, error, isLoading, mutate } = useSWR(

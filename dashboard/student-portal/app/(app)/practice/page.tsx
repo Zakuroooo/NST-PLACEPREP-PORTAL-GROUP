@@ -7,7 +7,8 @@ const IconMap: Record<string, React.ElementType> = {
   Monitor, Building, Calculator, Users, Zap, GraduationCap, Target, FileText
 };
 import { usePractice, useCompanies } from "@/lib/hooks";
-import { practiceCategories, allTopics, type PracticeCategory, type Difficulty } from "@/lib/constants";
+import useSWR from "swr";
+import { practiceCategories, type PracticeCategory, type Difficulty } from "@/lib/constants";
 
 // ── Difficulty badge colours ─────────────────────────
 const diffBadge = (d: string) =>
@@ -62,6 +63,10 @@ function CategoryCard({
 function PracticeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  
+  const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then((r) => r.json());
+  const { data: topicsData } = useSWR('/api/topics', fetcher);
+  const allTopics = topicsData?.data?.topics ?? topicsData?.topics ?? [];
 
   // Which category is active (from URL or selection)
   const [activeCategory, setActiveCategory] = useState<string | null>(
@@ -97,6 +102,7 @@ function PracticeContent() {
     topic,
     difficulty,
     company,
+    roundType: activeCat?.roundTypes?.join(',')
   });
   
   const { data: companiesData } = useCompanies();
@@ -229,7 +235,7 @@ function PracticeContent() {
               className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-gray-700"
             >
               <option value="">All Topics</option>
-              {allTopics.map((t) => (
+              {allTopics.map((t: string) => (
                 <option key={t} value={t}>{t}</option>
               ))}
             </select>

@@ -11,7 +11,9 @@ export const questionRepository = {
     companyId?: string;
     topic?: string;
     difficulty?: string;
-    roundType?: string;
+    roundType?: string | string[];
+    role?: string;
+    minFrequency?: number;
     page?: number;
     limit?: number;
   }): Promise<{ questions: IQuestion[]; total: number }> {
@@ -19,8 +21,20 @@ export const questionRepository = {
     if (filter.companySlug) query.companySlug = filter.companySlug;
     if (filter.companyId) query.companyId = new mongoose.Types.ObjectId(filter.companyId);
     if (filter.difficulty) query.difficulty = filter.difficulty;
-    if (filter.roundType) query.roundType = filter.roundType;
+    
+    if (filter.roundType) {
+      if (Array.isArray(filter.roundType)) {
+        query.roundType = { $in: filter.roundType };
+      } else {
+        query.roundType = filter.roundType;
+      }
+    }
+    
     if (filter.topic) query.topics = filter.topic;
+    if (filter.role) query.targetRoles = filter.role;
+    if (filter.minFrequency !== undefined) {
+      query.frequencyScore = { $gte: filter.minFrequency };
+    }
 
     const page = filter.page || 1;
     const limit = filter.limit || 20;

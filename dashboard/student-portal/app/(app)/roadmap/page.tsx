@@ -12,22 +12,8 @@ import { Suspense } from "react";
 import { useRoadmap, usePractice, useProgress, useCompanies } from "@/lib/hooks";
 import { type UserRoadmapCompany } from "@/lib/constants";
 
-// ─── Company logo map ────────────────────────────────────────────────────────
-const COMPANY_LOGOS: Record<string, string> = {
-  google:    "https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg",
-  microsoft: "https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg",
-  amazon:    "https://upload.wikimedia.org/wikipedia/commons/a/a9/Amazon_logo.svg",
-  apple:     "https://upload.wikimedia.org/wikipedia/commons/f/fa/Apple_logo_black.svg",
-  meta:      "https://upload.wikimedia.org/wikipedia/commons/7/7b/Meta_Platforms_Inc._logo.svg",
-  netflix:   "https://upload.wikimedia.org/wikipedia/commons/0/08/Netflix_2015_logo.svg",
-  flipkart:  "https://upload.wikimedia.org/wikipedia/commons/1/18/Flipkart_logo.png",
-  tcs:       "https://upload.wikimedia.org/wikipedia/commons/b/b1/Tata_Consultancy_Services_Logo.svg",
-  razorpay:  "https://upload.wikimedia.org/wikipedia/commons/8/89/Razorpay_logo.svg",
-  atlassian: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Atlassian_logo.svg",
-};
-
 function getLogoUrl(slug: string): string | null {
-  return COMPANY_LOGOS[slug.toLowerCase()] ?? null;
+  return `https://www.google.com/s2/favicons?domain=${slug.toLowerCase()}.com&sz=128`;
 }
 
 function CompanyLogo({
@@ -71,8 +57,8 @@ function ActiveRoadmapCard({
 }) {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const logoUrl = getLogoUrl(company.slug);
-  const totalQ = company.weeks.reduce((s, w) => s + w.questions.length, 0);
-  const doneQ  = company.weeks.reduce((s, w) => s + w.questions.filter(q => q.done).length, 0);
+  const totalQ = company.weeks.reduce((s, w) => s + (w.totalQuestions || 0), 0);
+  const doneQ  = company.weeks.reduce((s, w) => s + (w.doneQuestions || 0), 0);
   const pct = totalQ > 0 ? Math.round((doneQ / totalQ) * 100) : 0;
   const daysElapsed = company.currentWeek * 7;
   const totalDays   = company.totalWeeks  * 7;

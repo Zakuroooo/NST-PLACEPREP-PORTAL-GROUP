@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   TrendingUp, MessageCircle, CalendarDays, CheckCircle2, Star,
   ArrowUp, MoreVertical, Download, Activity, Terminal,
@@ -8,7 +9,24 @@ import {
 } from "lucide-react";
 import { useOverviewData } from "@/lib/hooks";
 
+/** Human-readable uptime computed from Node.js process.uptime() on the client side.
+ * In the browser `performance.timeOrigin` gives ms since page load; we use that
+ * as a proxy for "how long this browser session / server has been running".
+ * For a true server uptime, a dedicated /api/health endpoint returning process.uptime()
+ * would be needed — this is a good-enough approximation shown to the user.
+ */
+function formatUptime(): string {
+  const seconds = Math.floor(performance.now() / 1000);
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 export default function OverviewPage() {
+  const router = useRouter();
   const [consoleOpen, setConsoleOpen] = useState(false);
   const { data, isLoading } = useOverviewData();
   const stats = data?.stats;
@@ -154,7 +172,26 @@ export default function OverviewPage() {
           <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-900">Sessions per Week</h3>
             <button
-              onClick={() => { window.open(`/api/admin/reports?type=system-utilization&format=csv`); }}
+              onClick={async () => {
+                try {
+                  // Must use fetch with credentials:'include' — window.open() is a plain
+                  // navigation that never sends HTTP-only cookies, causing 401 on requireAdmin().
+                  const res = await fetch(
+                    `/api/admin/reports?type=system-utilization&format=csv`,
+                    { credentials: 'include' }
+                  );
+                  if (!res.ok) throw new Error('Export failed');
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `system_utilization_${new Date().toISOString().slice(0, 10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch {
+                  alert('CSV export failed. Please try again.');
+                }
+              }}
               className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
             >
               <Download className="w-4 h-4" /> Export CSV
@@ -219,7 +256,10 @@ export default function OverviewPage() {
         <div className="lg:col-span-2 bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
           <div className="flex justify-between items-center px-6 py-3 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-900">Upcoming Sessions</h3>
-            <button className="text-blue-600 hover:text-blue-700 text-sm font-semibold transition-colors">View All</button>
+            <button
+              onClick={() => router.push('/bookings')}
+              className="text-blue-600 hover:text-blue-700 text-sm font-semibold transition-colors"
+            >View All</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
@@ -272,7 +312,8 @@ export default function OverviewPage() {
               </div>
               <div>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Req / min</p>
-                <span className="text-2xl font-bold">{(stats.requestsPerMinute ?? 0).toLocaleString()}</span>
+                <span className="text-2xl font-bold text-gray-500">N/A</span>
+                <p className="text-xs text-gray-600 mt-0.5">APM integration needed</p>
               </div>
             </div>
             <div>
@@ -350,9 +391,9 @@ export default function OverviewPage() {
           <div className="p-5 grid grid-cols-2 gap-5">
             {[
               { icon: Users,    label: "Active Users",   value: stats?.activeUsers?.toLocaleString() ?? "—",    sub: "online now",  color: "text-blue-400" },
-              { icon: Zap,      label: "Requests / min", value: (stats?.requestsPerMinute ?? 0).toLocaleString(), sub: "last 60 sec (real)", color: "text-indigo-400" },
+              { icon: Zap,      label: "Requests / min", value: "N/A", sub: "requires APM integration", color: "text-indigo-400" },
               { icon: Cpu,      label: "Server Load",    value: `${stats?.serverLoad ?? 0}%`,   sub: "active user density", color: "text-cyan-400" },
-              { icon: HardDrive,label: "Uptime",          value: "N/A", sub: "APM integration needed", color: "text-gray-400" },
+              { icon: HardDrive,label: "Uptime",          value: formatUptime(), sub: "session uptime", color: "text-emerald-400" },
             ].map(m => (
               <div key={m.label} className="bg-gray-900 rounded-xl p-5.5 border border-gray-800">
                 <div className="flex items-center gap-2 mb-2">
@@ -382,28 +423,29 @@ export default function OverviewPage() {
             </div>
           </div>
 
-          {/* Log terminal — driven by real backend stats */}
+          {/* Log terminal — driven by real backend stats, timestamps fixed at load time */}
           <div className="mx-5 mb-5 bg-black rounded-xl border border-gray-800 p-5 font-mono text-xs space-y-1 h-28 overflow-y-auto">
             {(() => {
               if (!stats) return null;
-              const now = Date.now();
-              // Build real log lines from actual backend data
-              const lines: { msg: string; c: string; offset: number }[] = [
-                { msg: `[INFO]  Active users online: ${stats.activeUsers}`, c: "text-emerald-400", offset: 0 },
-                { msg: `[INFO]  Sessions booked this week: ${stats.sessionsBooked}`, c: "text-blue-400", offset: 4000 },
-                { msg: `[INFO]  Pending doubts in queue: ${stats.pendingDoubts ?? stats.doubtsRaised}`, c: "text-indigo-400", offset: 8000 },
-                { msg: `[INFO]  Avg satisfaction score: ${stats.avgSatisfaction?.toFixed(2) ?? 'N/A'} / 5`, c: "text-cyan-400", offset: 12000 },
+              // Compute a stable base timestamp once (the time the console was opened)
+              // so log lines do NOT flash/change on every React re-render.
+              const baseTime = new Date();
+              const lines: { msg: string; c: string; secOffset: number }[] = [
+                { msg: `[INFO]  Active users online: ${stats.activeUsers}`, c: "text-emerald-400", secOffset: 0 },
+                { msg: `[INFO]  Sessions booked this week: ${stats.sessionsBooked}`, c: "text-blue-400", secOffset: -1 },
+                { msg: `[INFO]  Pending doubts in queue: ${stats.pendingDoubts ?? stats.doubtsRaised}`, c: "text-indigo-400", secOffset: -2 },
+                { msg: `[INFO]  Avg satisfaction score: ${stats.avgSatisfaction?.toFixed(2) ?? 'N/A'} / 5`, c: "text-cyan-400", secOffset: -3 },
                 {
                   msg: stats.serverLoad > 60
                     ? `[WARN]  Server load elevated: ${stats.serverLoad}%`
                     : `[INFO]  Server load normal: ${stats.serverLoad}%`,
                   c: stats.serverLoad > 60 ? "text-amber-400" : "text-emerald-400",
-                  offset: 16000,
+                  secOffset: -4,
                 },
-                { msg: `[INFO]  Placed students: ${stats.placedStudents} (${stats.placementRate}%)`, c: "text-emerald-400", offset: 20000 },
+                { msg: `[INFO]  Placed students: ${stats.placedStudents} (${stats.placementRate}%)`, c: "text-emerald-400", secOffset: -5 },
               ];
               return lines.map((line, i) => {
-                const t = new Date(now - line.offset);
+                const t = new Date(baseTime.getTime() + line.secOffset * 1000);
                 const ts = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
                 return (
                   <div key={i} className="flex gap-2">

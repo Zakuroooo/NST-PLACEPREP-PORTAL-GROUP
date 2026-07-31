@@ -5,14 +5,16 @@
  * Uses aggregation pipelines — kept in this route since these are read-only analytical
  * queries with no business logic. For V2, move to an analytics.service.ts.
  *
- * PERFORMANCE: Results are cached for 5 minutes server-side to prevent hammering
- * MongoDB with 5 heavy aggregations on every 30-second SWR refresh.
+ * PERFORMANCE: Cache-Control: private, max-age=300 instructs the browser to cache
+ * analytics responses for 5 minutes. This avoids hammering MongoDB on every
+ * 30-second SWR refresh while remaining safe for serverless deployments.
+ * Note: module-level globals (e.g. `let analyticsCache`) are unreliable in
+ * serverless environments because each cold-start begins with a fresh module scope.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from 'placeprep-backend/src/config/db';
 import { requireAdmin } from 'placeprep-backend/src/utils/authMiddleware';
-import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError } from 'placeprep-backend/src/utils/apiError';
 import { checkRateLimit, getClientIp, RATE_LIMITS } from 'placeprep-backend/src/utils/rateLimiter';
 import StudentProfile from 'placeprep-backend/src/models/StudentProfile';
@@ -20,9 +22,9 @@ import QuestionCompletion from 'placeprep-backend/src/models/QuestionCompletion'
 import InterviewExperience from 'placeprep-backend/src/models/InterviewExperience';
 import DoubtThread from 'placeprep-backend/src/models/DoubtThread';
 
-// Server-side cache: reuse expensive aggregation results for 5 minutes
-const CACHE_TTL_MS = 5 * 60 * 1000;
-let analyticsCache: { data: unknown; expiresAt: number } | null = null;
+// Route-segment cache: Next.js will cache this route's response for 5 minutes.
+// This is the idiomatic Next.js approach and works correctly in serverless deployments.
+export const revalidate = 300;
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   // Rate limit: prevent analytics route from being hammered
@@ -38,19 +40,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await connectDB();
     await requireAdmin(request);
-
-    // Serve from cache if still fresh
-    if (analyticsCache && Date.now() < analyticsCache.expiresAt) {
-      return NextResponse.json(
-        { success: true, data: analyticsCache.data },
-        {
-          headers: {
-            'Cache-Control': 'private, max-age=300',
-            'X-Cache': 'HIT',
-          },
-        }
-      );
-    }
 
     const [
       placementFunnel,
@@ -133,15 +122,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       })),
     };
 
-    // Store in cache
-    analyticsCache = { data: responseData, expiresAt: Date.now() + CACHE_TTL_MS };
-
     return NextResponse.json(
       { success: true, data: responseData },
       {
         headers: {
+          // 5-minute browser cache — prevents hammering MongoDB on SWR refreshes
           'Cache-Control': 'private, max-age=300',
-          'X-Cache': 'MISS',
         },
       }
     );

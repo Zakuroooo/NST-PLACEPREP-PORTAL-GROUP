@@ -61,10 +61,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       topic = undefined;
     }
 
+    let roundTypeQuery: string | string[] | undefined = roundType;
+    if (roundType && roundType.includes(',')) {
+      roundTypeQuery = roundType.split(',').map(r => r.trim());
+    }
+
     const { questions: rawQuestions, total } = await questionRepository.findMany({
       topic,
       difficulty,
-      roundType,
+      roundType: roundTypeQuery as any,
       companySlug,
       page,
       limit,

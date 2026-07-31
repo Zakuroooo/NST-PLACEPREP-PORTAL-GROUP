@@ -77,6 +77,21 @@ export const sessionRepository = {
     });
   },
 
+  async countManyByStudentIds(studentIds: string[]): Promise<Record<string, number>> {
+    const objectIds = studentIds
+      .filter((id) => mongoose.isValidObjectId(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+    const results = await SessionBooking.aggregate([
+      { $match: { studentId: { $in: objectIds } } },
+      { $group: { _id: '$studentId', count: { $sum: 1 } } },
+    ]);
+    const map: Record<string, number> = {};
+    for (const r of results) {
+      map[r._id.toString()] = r.count;
+    }
+    return map;
+  },
+
   async countByFacultyId(facultyId: string): Promise<number> {
     if (!mongoose.isValidObjectId(facultyId)) return 0;
     return SessionBooking.countDocuments({

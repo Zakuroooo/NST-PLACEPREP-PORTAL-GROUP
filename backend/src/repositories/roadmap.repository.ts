@@ -59,6 +59,13 @@ export const roadmapRepository = {
       week.doneQuestions += 1;
       if (week.doneQuestions >= week.totalQuestions) {
         week.status = 'done';
+        
+        // Unlock next week
+        const nextWeek = roadmap.weeks.find(w => w.weekNumber === weekNumber + 1);
+        if (nextWeek && nextWeek.status === 'locked') {
+          nextWeek.status = 'active';
+          roadmap.currentWeek = weekNumber + 1;
+        }
       }
     }
 

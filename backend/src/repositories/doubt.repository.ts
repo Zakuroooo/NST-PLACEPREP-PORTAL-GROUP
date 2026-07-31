@@ -96,6 +96,19 @@ export const doubtRepository = {
     return DoubtThread.countDocuments(filter);
   },
 
+  async countManyByStudentIds(studentIds: string[]): Promise<Record<string, number>> {
+    const objectIds = studentIds.map((id) => new mongoose.Types.ObjectId(id));
+    const results = await DoubtThread.aggregate([
+      { $match: { studentId: { $in: objectIds } } },
+      { $group: { _id: '$studentId', count: { $sum: 1 } } }
+    ]);
+    const map: Record<string, number> = {};
+    for (const r of results) {
+      map[r._id.toString()] = r.count;
+    }
+    return map;
+  },
+
   async deleteAllSeeded(): Promise<void> {
     await DoubtThread.deleteMany({ isSeeded: true });
   },

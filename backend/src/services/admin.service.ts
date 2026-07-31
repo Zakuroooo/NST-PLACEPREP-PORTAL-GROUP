@@ -138,28 +138,32 @@ export const adminService = {
 
     // BUG 3 FIX: DoubtThread.studentId and SessionBooking.studentId store User._id,
     // NOT StudentProfile._id. Must use userIds here, not profileIds.
-    const [doubtCounts, sessionCounts] = await Promise.all([
-      Promise.all(userIds.map((id) => doubtRepository.countByStudentIdAndStatus(id))),
-      Promise.all(userIds.map((id) => sessionRepository.countByStudentId(id))),
+    //
+    // PERF FIX: Replace N individual countDocuments with two bulk $in+$group aggregations.
+    // Previously: 2N concurrent queries for limit=100 → 200 DB ops
+    // Now: 2 aggregation queries regardless of page size
+    const [doubtCountMap, sessionCountMap] = await Promise.all([
+      doubtRepository.countManyByStudentIds(userIds),
+      sessionRepository.countManyByStudentIds(userIds),
     ]);
 
-    const enriched = profiles.map((p, i) => {
+    const enriched = profiles.map((p) => {
       const user = userMap.get(p.userId.toString());
+      const uid  = p.userId.toString();
       return {
-        id: p._id.toString(),
-        userId: p.userId.toString(),
-        name: p.fullName,
-        email: user?.email,
-        batch: p.batch,
-        branch: p.branch,
+        id:       p._id.toString(),
+        userId:   uid,
+        name:     p.fullName,
+        email:    user?.email,
+        batch:    p.batch,
+        branch:   p.branch,
         progress: Math.min(Math.round((p.xpTotal || 0) / 20), 100),
-        doubts: doubtCounts[i] ?? 0,
-        sessions: sessionCounts[i] ?? 0,
-        status: p.placementStatus,
-        xpTotal: p.xpTotal,
+        doubts:   doubtCountMap[uid]   ?? 0,
+        sessions: sessionCountMap[uid] ?? 0,
+        status:   p.placementStatus,
+        xpTotal:  p.xpTotal,
       };
     });
-
 
     return { students: enriched, total };
   },

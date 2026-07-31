@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { Search, X, ChevronLeft, ChevronRight, ArrowUpRight, Users, TrendingUp, Briefcase, GraduationCap, UserX } from "lucide-react";
-import { useStudents } from "@/lib/hooks";
+import { useStudents, useStudentStats } from "@/lib/hooks";
 
 // Avatar color palette — deterministic from name
 const AVATAR_COLORS = [
@@ -55,13 +55,17 @@ export default function StudentsPage() {
   const { students, total, isLoading } = useStudents(currentPage, itemsPerPage, debouncedSearch, selectedBatch);
   const totalPages = Math.ceil(total / itemsPerPage);
 
-  // Summary stats — derived from real API total
+  // Summary stats — use server-side `total` for the real student count.
+  // placedCount and avgProg are fetched from a stats endpoint so they
+  // reflect ALL students, not just the current page (previously a P1 bug).
   const totalCount  = total;
-  const placedCount = students.filter((s: any) => s.placementStatus === 'PLACED' || s.status === 'PLACED').length;
-  const avgProg     = students.length > 0
-    ? Math.round(students.reduce((a: number, s: any) => a + (s.progress ?? s.xpTotal ?? 0) / 100, 0) / students.length)
-    : 0;
-  const batches = new Set(students.map((s: any) => s.batch ?? s.year)).size;
+  // Fetch platform-wide stats (placed count, avg progress, batch count) from API.
+  // These don't depend on current page/filter so they always reflect the full DB.
+  const { data: statsData } = useStudentStats();
+  const placedCount = statsData?.placedCount   ?? students.filter((s: any) => s.status === 'PLACED').length;
+  const avgProg     = statsData?.avgProgress   ?? 0;
+  const batches     = statsData?.batchCount    ?? new Set(students.map((s: any) => s.batch ?? s.year)).size;
+
 
   const BATCH_OPTIONS = ["All", "2023", "2024", "2025", "2026"];
 
@@ -73,7 +77,7 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Students</h1>
           <p className="text-sm text-gray-500 mt-0.5">{totalCount} enrolled · {batches} active batches</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
@@ -83,7 +87,7 @@ export default function StudentsPage() {
               onChange={e => setSearchInput(e.target.value)}
             />
           </div>
-          {/* Batch pills */}
+          {/* Batch pills — desktop */}
           <div className="hidden sm:flex items-center gap-1">
             {BATCH_OPTIONS.map(b => (
               <button
@@ -99,6 +103,14 @@ export default function StudentsPage() {
               </button>
             ))}
           </div>
+          {/* Batch select — mobile (replaces hidden pills so mobile users can filter too) */}
+          <select
+            className="sm:hidden px-2.5 py-1.5 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 border-0 focus:ring-2 focus:ring-blue-500/20"
+            value={selectedBatch}
+            onChange={e => { setSelectedBatch(e.target.value); setCurrentPage(1); }}
+          >
+            {BATCH_OPTIONS.map(b => <option key={b} value={b}>{b === 'All' ? 'All Batches' : `Batch ${b}`}</option>)}
+          </select>
           {(searchInput || selectedBatch !== "All") && (
             <button
               onClick={() => { setSearchInput(""); setSelectedBatch("All"); setCurrentPage(1); }}
