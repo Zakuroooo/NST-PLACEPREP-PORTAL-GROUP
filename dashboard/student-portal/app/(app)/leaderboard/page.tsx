@@ -22,6 +22,8 @@ export default function LeaderboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [period, setPeriod] = useState<"alltime" | "monthly">("alltime");
+  const [showAll, setShowAll] = useState(false);
+  const VISIBLE_LIMIT = 20;
 
   useEffect(() => {
     setIsLoading(true);
@@ -55,6 +57,7 @@ export default function LeaderboardPage() {
   const me = leaders.find((u) => u.isYou);
   const top3 = filtered.slice(0, 3);
   const rest = filtered.slice(3);
+  const visibleRest = showAll ? rest : rest.slice(0, VISIBLE_LIMIT);
 
   const podiumColors = [
     { bg: "bg-indigo-600", border: "border-indigo-200", badge: "bg-indigo-700", medal: "text-indigo-500" },
@@ -185,7 +188,7 @@ export default function LeaderboardPage() {
                   <div key={h} className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</div>
                 ))}
               </div>
-              {rest.map((u) => (
+              {visibleRest.map((u) => (
                 <div
                   key={u.rank}
                   className={`grid grid-cols-[80px_100px_1fr_150px_150px] gap-4 px-5 py-4 border-b border-gray-100 last:border-0 ${u.isYou ? "bg-indigo-50/50 border-indigo-100" : "hover:bg-gray-50"} transition-colors`}
@@ -205,11 +208,16 @@ export default function LeaderboardPage() {
                 </div>
               ))}
             </div>
-            <div className="flex justify-center py-4 border-t border-gray-100">
-              <button className="border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50">
-                View Top 100 <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
+            {rest.length > VISIBLE_LIMIT && (
+              <div className="flex justify-center py-4 border-t border-gray-100">
+                <button
+                  onClick={() => setShowAll(!showAll)}
+                  className="border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50"
+                >
+                  {showAll ? "Show Less" : "View All"} <ChevronDown className={`w-4 h-4 transition-transform ${showAll ? "rotate-180" : ""}`} />
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
