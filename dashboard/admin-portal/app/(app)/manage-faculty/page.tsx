@@ -41,14 +41,8 @@ export default function ManageFacultyPage() {
   const total: number = data?.data?.total ?? data?.total ?? 0;
   const totalPages = Math.ceil(total / itemsPerPage);
 
-  // Local filter on fetched page
-  const paginated = useMemo(() => {
-    return faculty.filter(
-      (f) =>
-        (f.fullName ?? f.name ?? '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (f.email ?? '').toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [faculty, searchQuery]);
+  // The API already handles pagination and search filtering.
+  const paginated = faculty;
 
   // Modal states
   const [editingFaculty, setEditingFaculty] = useState<Faculty | null>(null);
