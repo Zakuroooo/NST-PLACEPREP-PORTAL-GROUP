@@ -143,10 +143,11 @@ export default function StudentLoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <label htmlFor="student-email" className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Email
               </label>
               <input
+                id="student-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -158,11 +159,12 @@ export default function StudentLoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <label htmlFor="student-password" className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Password
               </label>
               <div className="relative">
                 <input
+                  id="student-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
