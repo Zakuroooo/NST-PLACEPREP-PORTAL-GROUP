@@ -8,6 +8,10 @@ import { Eye, EyeOff, Loader2, BookOpenCheck, MessageCircle, Calendar, BarChart3
 const STUDENT_LOGIN_URL =
   process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || "http://localhost:3000";
 
+// Dedicated env var for Admin Portal — avoids fragile string replacement on the URL
+const ADMIN_PORTAL_URL =
+  process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL || "http://localhost:3002";
+
 export default function FacultyLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -130,8 +134,9 @@ export default function FacultyLoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Email</label>
+              <label htmlFor="faculty-email" className="text-xs font-medium text-gray-400 uppercase tracking-wider">Email</label>
               <input
+                id="faculty-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -143,9 +148,10 @@ export default function FacultyLoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">Password</label>
+              <label htmlFor="faculty-password" className="text-xs font-medium text-gray-400 uppercase tracking-wider">Password</label>
               <div className="relative">
                 <input
+                  id="faculty-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -191,7 +197,7 @@ export default function FacultyLoginPage() {
               Student Portal
             </a>
             <span>·</span>
-            <a href={`${STUDENT_LOGIN_URL.replace("3000", "3002")}/login`} className="hover:text-gray-500 transition-colors">
+            <a href={`${ADMIN_PORTAL_URL}/login`} className="hover:text-gray-500 transition-colors">
               Admin Portal
             </a>
           </div>

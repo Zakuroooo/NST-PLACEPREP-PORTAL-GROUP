@@ -27,6 +27,7 @@ export default function DashboardPage() {
   const [semesterDropdownOpen, setSemesterDropdownOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSyncToast, setShowSyncToast] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   const [lastSyncTimestamp, setLastSyncTimestamp] = useState<Date>(new Date());
   const [syncTimeDisplay, setSyncTimeDisplay] = useState("just now");
 
@@ -44,26 +45,31 @@ export default function DashboardPage() {
   }, [lastSyncTimestamp]);
 
   // Real data from APIs
-  const { data: curriculumData } = useSWR('/api/faculty/curriculum', fetcher);
-  const { data: trendsData } = useSWR('/api/faculty/trends', fetcher);
+  const { data: curriculumData, error: curriculumError, mutate: mutateCurriculum } = useSWR('/api/faculty/curriculum', fetcher);
+  const { data: trendsData, error: trendsError, mutate: mutateTrends } = useSWR('/api/faculty/trends', fetcher);
   const mockCurriculumCoverage = curriculumData?.data?.subjects ?? [];
   const industryTrends = trendsData?.data?.industryTrends ?? [];
 
-  const { mutate } = useSWR('/api/faculty/dashboard', fetcher);
+  const { mutate: mutateDashboard } = useSWR('/api/faculty/dashboard', fetcher);
   const handleSyncData = async () => {
     if (isSyncing) return;
     setIsSyncing(true);
-    await mutate(); // Re-fetch the data from the backend
-    setTimeout(() => {
-      setIsSyncing(false);
+    try {
+      // Refresh all three data sources so every section updates together
+      await Promise.all([mutateDashboard(), mutateCurriculum(), mutateTrends()]);
       setLastSyncTimestamp(new Date());
       setShowSyncToast(true);
       setTimeout(() => setShowSyncToast(false), 3000);
-    }, 800);
+    } catch {
+      setSyncError(true);
+      setTimeout(() => setSyncError(false), 3000);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Real dashboard data (faculty info + stats)
-  const { data: dashboardData } = useSWR('/api/faculty/dashboard', fetcher);
+  const { data: dashboardData, error: dashboardError } = useSWR('/api/faculty/dashboard', fetcher);
   const facultyInfo = dashboardData?.data?.faculty ?? dashboardData?.faculty;
 
   const currentFaculty = {
@@ -261,7 +267,14 @@ export default function DashboardPage() {
       {showSyncToast && (
         <div className="fixed top-4 right-4 bg-emerald-600 text-white font-bold text-xs px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-in slide-in-from-top-5 duration-200">
           <CheckCircle2 className="w-4 h-4 shrink-0" />
-          <span>Curriculum alignment data synced successfully!</span>
+          <span>Dashboard synced successfully!</span>
+        </div>
+      )}
+
+      {syncError && (
+        <div className="fixed top-4 right-4 bg-red-600 text-white font-bold text-xs px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-in slide-in-from-top-5 duration-200">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>Sync failed. Please check your connection and try again.</span>
         </div>
       )}
 
@@ -278,6 +291,18 @@ export default function DashboardPage() {
             <div className="lg:col-span-2 h-96 bg-gray-100 animate-pulse rounded-xl"></div>
             <div className="lg:col-span-1 h-96 bg-gray-100 animate-pulse rounded-xl"></div>
           </div>
+        </div>
+      ) : dashboardError ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <AlertTriangle className="w-10 h-10 text-red-400 mb-4" />
+          <p className="text-gray-700 font-semibold text-base mb-1">Failed to load dashboard data</p>
+          <p className="text-gray-400 text-sm mb-5">There was a problem connecting to the server. Please check your connection.</p>
+          <button
+            onClick={() => { mutateDashboard(); mutateCurriculum(); mutateTrends(); }}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" /> Try Again
+          </button>
         </div>
       ) : (
         <>
@@ -493,8 +518,14 @@ export default function DashboardPage() {
               <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
                 <Activity className="w-5 h-5" />
               </div>
-              <span className="text-amber-700 bg-amber-50 text-[10px] px-2 py-0.5 rounded-full font-semibold border border-amber-100 uppercase tracking-wider">
-                Top 5% Faculty
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border uppercase tracking-wider ${
+                resolutionRate >= 90
+                  ? 'text-emerald-700 bg-emerald-50 border-emerald-100'
+                  : resolutionRate >= 70
+                  ? 'text-amber-700 bg-amber-50 border-amber-100'
+                  : 'text-red-700 bg-red-50 border-red-100'
+              }`}>
+                {resolutionRate >= 90 ? 'Top Performer' : resolutionRate >= 70 ? 'Good Standing' : 'Needs Attention'}
               </span>
             </div>
             <div>
