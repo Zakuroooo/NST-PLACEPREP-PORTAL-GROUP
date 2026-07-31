@@ -37,7 +37,23 @@ function timeAgo(date: string | Date) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [checked, setChecked] = useState<Record<number, boolean>>({});
+  // Persist task checkboxes in localStorage so they survive a page refresh
+  const [checked, setChecked] = useState<Record<number, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem("student-tasks-checked");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const toggleChecked = (id: number) => {
+    setChecked((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try { localStorage.setItem("student-tasks-checked", JSON.stringify(next)); } catch { /* quota exceeded */ }
+      return next;
+    });
+  };
 
   // Primary dashboard data
   const { data: apiData, isLoading, error } = useDashboard();
@@ -244,7 +260,7 @@ export default function DashboardPage() {
                     <div
                       key={q.id}
                       className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
-                      onClick={() => setChecked((c) => ({ ...c, [q.id]: !c[q.id] }))}
+                      onClick={() => toggleChecked(q.id)}
                     >
                       <button className="shrink-0" aria-label={checked[q.id] ? "Mark incomplete" : "Mark complete"}>
                         {checked[q.id] ? (
