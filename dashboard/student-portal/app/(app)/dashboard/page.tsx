@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -44,9 +44,12 @@ export default function DashboardPage() {
   // Recent interview experiences for the bottom section
   const { data: expData } = useSWR('/api/experiences?limit=3', fetcher);
 
-  if (error) {
-    toast.error("Could not load dashboard data. Showing cached view.");
-  }
+  // Only fire the error toast once when the error first appears, not on every re-render
+  useEffect(() => {
+    if (error) {
+      toast.error("Could not load dashboard data. Showing cached view.");
+    }
+  }, [error]);
 
   // Map roadmaps to company cards
   const targetCompanies = (apiData?.roadmaps || []).map((r: any) => ({
