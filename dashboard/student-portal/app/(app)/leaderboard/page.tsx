@@ -135,12 +135,25 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-12 text-gray-400 text-sm">Loading leaderboard...</div>
-      ) : leaders.length === 0 ? (
-        <div className="text-center py-12 text-gray-400 text-sm">No data yet. Be the first to top the board!</div>
+      {leaders.length === 0 ? (
+        isLoading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3" />
+            <div className="text-gray-400 text-sm">Loading leaderboard...</div>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-400 text-sm">No data yet. Be the first to top the board!</div>
+        )
       ) : (
-        <>
+        <div className="relative">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/60 z-10 flex items-start justify-center pt-20 backdrop-blur-[1px]">
+              <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-full shadow-lg border border-gray-100">
+                <div className="w-5 h-5 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                <span className="text-sm font-semibold text-gray-700">Updating...</span>
+              </div>
+            </div>
+          )}
           {/* Podium */}
           {top3.length >= 3 && (
             <div className="flex justify-center items-end gap-2 sm:gap-8 mb-8">
@@ -219,7 +232,7 @@ export default function LeaderboardPage() {
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
