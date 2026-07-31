@@ -201,7 +201,7 @@ export default function AdminLoginPage() {
               Student Portal
             </a>
             <span>·</span>
-            <a href={`${STUDENT_LOGIN_URL.replace("3000", "3001")}/login`} className="hover:text-gray-500 transition-colors">
+            <a href={`${process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL || "http://localhost:3001"}/login`} className="hover:text-gray-500 transition-colors">
               Faculty Portal
             </a>
           </div>
