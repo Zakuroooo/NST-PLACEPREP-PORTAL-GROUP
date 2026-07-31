@@ -12,6 +12,7 @@ interface IRoadmapWeek {
   totalQuestions: number;
   doneQuestions: number;
   status: WeekStatus;
+  questionIds: mongoose.Types.ObjectId[];
 }
 
 export interface IUserRoadmap extends Document {
@@ -29,6 +30,7 @@ export interface IUserRoadmap extends Document {
   weeks: IRoadmapWeek[];
   isSeeded?: boolean;
   addedAt: Date;
+  lastActive?: Date;
 }
 
 const RoadmapWeekSchema = new Schema<IRoadmapWeek>(
@@ -41,6 +43,11 @@ const RoadmapWeekSchema = new Schema<IRoadmapWeek>(
       type: String,
       enum: ['done', 'active', 'locked'],
       default: 'locked',
+    },
+    questionIds: {
+      type: [Schema.Types.ObjectId],
+      ref: 'Question',
+      default: [],
     },
   },
   { _id: false }
@@ -70,6 +77,7 @@ const UserRoadmapSchema = new Schema<IUserRoadmap>(
     weeks: { type: [RoadmapWeekSchema], default: [] },
     isSeeded: { type: Boolean, default: false },
     addedAt: { type: Date, default: Date.now },
+    lastActive: { type: Date },
   },
   {
     collection: 'user_roadmaps',

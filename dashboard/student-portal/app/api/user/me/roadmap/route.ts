@@ -11,6 +11,7 @@ import connectDB from 'placeprep-backend/src/config/db';
 import { requireStudent } from 'placeprep-backend/src/utils/authMiddleware';
 import { roadmapRepository } from 'placeprep-backend/src/repositories/roadmap.repository';
 import { companyRepository } from 'placeprep-backend/src/repositories/company.repository';
+import { questionRepository } from 'placeprep-backend/src/repositories/question.repository';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError, ApiError } from 'placeprep-backend/src/utils/apiError';
 import {
@@ -74,45 +75,54 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // ── Build curriculum weeks from the company's real topic frequency data ──
-    // Each week = one top topic from the company's question pool.
-    // Topics are sorted by questionCount descending so students tackle the
-    // most-tested areas first.
     const topicFrequency: Array<{ topicName: string; questionCount: number }> =
       (company as any).topicFrequency ?? [];
 
     const userWeeks = Math.min(Math.max(Number(preparationWeeks) || 12, 4), 52);
+    const resolvedRole = targetRole || 'SDE-1';
 
-    // Pick the top N topics by question count (N = weeksCommitted)
+    // Set frequency threshold and questions-per-week by duration
+    let minFreq = 0.0;
+    let questionsPerWeek = 5;
+    if (userWeeks <= 4) { minFreq = 0.6; questionsPerWeek = 15; }
+    else if (userWeeks <= 6) { minFreq = 0.4; questionsPerWeek = 12; }
+    else if (userWeeks <= 8) { minFreq = 0.25; questionsPerWeek = 10; }
+    else if (userWeeks <= 12) { minFreq = 0.1; questionsPerWeek = 7; }
+
     const topTopics = topicFrequency
       .filter(t => t.questionCount > 0)
       .sort((a, b) => b.questionCount - a.questionCount)
       .slice(0, userWeeks);
 
-    // Fallback if company has no topicFrequency yet
-    const DEFAULT_TOPICS = [
-      { topicName: 'Arrays', questionCount: 10 },
-      { topicName: 'Strings', questionCount: 8 },
-      { topicName: 'Dynamic Programming', questionCount: 8 },
-      { topicName: 'Trees', questionCount: 6 },
-      { topicName: 'Graphs', questionCount: 6 },
-      { topicName: 'Greedy', questionCount: 5 },
-      { topicName: 'Binary Search', questionCount: 5 },
-      { topicName: 'Hash Tables', questionCount: 4 },
-      { topicName: 'Sorting', questionCount: 4 },
-      { topicName: 'Two Pointers', questionCount: 4 },
-      { topicName: 'Stack', questionCount: 3 },
-      { topicName: 'System Design', questionCount: 3 },
-    ];
+    const DEFAULT_TOPICS = ['Arrays', 'Strings', 'Dynamic Programming', 'Trees', 'Graphs', 'Greedy', 'Binary Search', 'Hash Tables', 'Sorting', 'Two Pointers'];
+    const weekTopics = topTopics.length >= 2 ? topTopics.map(t => t.topicName) : DEFAULT_TOPICS.slice(0, userWeeks);
 
-    const weekTopics = topTopics.length >= 2 ? topTopics : DEFAULT_TOPICS.slice(0, userWeeks);
+    // Fill remaining weeks if company has fewer topics than weeks
+    while (weekTopics.length < userWeeks) {
+      weekTopics.push(DEFAULT_TOPICS[weekTopics.length % DEFAULT_TOPICS.length]);
+    }
 
-    const weeks = weekTopics.map((t, i) => ({
-      weekNumber: i + 1,
-      topicLabel: t.topicName,
-      totalQuestions: Math.min(t.questionCount, 20), // cap at 20 per week for UX
-      doneQuestions: 0,
-      status: i === 0 ? 'active' : 'locked',
-    }));
+    const weeks = [];
+    for (let i = 0; i < weekTopics.length; i++) {
+      const topic = weekTopics[i];
+      
+      const { questions } = await questionRepository.findMany({
+        companySlug: safeSlug,
+        topic: topic,
+        role: resolvedRole,
+        minFrequency: minFreq,
+        limit: questionsPerWeek,
+      } as any);
+
+      weeks.push({
+        weekNumber: i + 1,
+        topicLabel: topic,
+        totalQuestions: questions.length,
+        doneQuestions: 0,
+        status: i === 0 ? 'active' : 'locked',
+        questionIds: questions.map(q => q._id),
+      });
+    }
 
     const actualWeeks = weeks.length;
 

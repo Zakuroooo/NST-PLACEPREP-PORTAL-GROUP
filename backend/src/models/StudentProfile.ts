@@ -24,6 +24,7 @@ export interface IStudentProfile extends Document {
   githubUrl?: string;
   xpTotal: number;
   currentStreakDays: number;
+  bestStreakDays: number;
   lastActiveAt?: Date;
   // Onboarding selections
   targetDomains: string[];
@@ -82,6 +83,7 @@ const StudentProfileSchema = new Schema<IStudentProfile>(
     githubUrl: { type: String },
     xpTotal: { type: Number, default: 0, min: 0 },
     currentStreakDays: { type: Number, default: 0, min: 0 },
+    bestStreakDays: { type: Number, default: 0, min: 0 },
     lastActiveAt: { type: Date },
     // Onboarding
     targetDomains: { type: [String], default: [] },
