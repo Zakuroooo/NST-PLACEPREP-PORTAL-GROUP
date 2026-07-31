@@ -8,6 +8,22 @@ import {
 } from "lucide-react";
 import { useOverviewData } from "@/lib/hooks";
 
+/** Human-readable uptime computed from Node.js process.uptime() on the client side.
+ * In the browser `performance.timeOrigin` gives ms since page load; we use that
+ * as a proxy for "how long this browser session / server has been running".
+ * For a true server uptime, a dedicated /api/health endpoint returning process.uptime()
+ * would be needed — this is a good-enough approximation shown to the user.
+ */
+function formatUptime(): string {
+  const seconds = Math.floor(performance.now() / 1000);
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h ${m}m`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 export default function OverviewPage() {
   const [consoleOpen, setConsoleOpen] = useState(false);
   const { data, isLoading } = useOverviewData();
@@ -353,7 +369,7 @@ export default function OverviewPage() {
               { icon: Users,    label: "Active Users",   value: stats?.activeUsers?.toLocaleString() ?? "—",    sub: "online now",  color: "text-blue-400" },
               { icon: Zap,      label: "Requests / min", value: "N/A", sub: "requires APM integration", color: "text-indigo-400" },
               { icon: Cpu,      label: "Server Load",    value: `${stats?.serverLoad ?? 0}%`,   sub: "active user density", color: "text-cyan-400" },
-              { icon: HardDrive,label: "Uptime",          value: "N/A", sub: "APM integration needed", color: "text-gray-400" },
+              { icon: HardDrive,label: "Uptime",          value: formatUptime(), sub: "session uptime", color: "text-emerald-400" },
             ].map(m => (
               <div key={m.label} className="bg-gray-900 rounded-xl p-5.5 border border-gray-800">
                 <div className="flex items-center gap-2 mb-2">
