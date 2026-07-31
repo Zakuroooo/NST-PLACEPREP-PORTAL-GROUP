@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   TrendingUp, MessageCircle, CalendarDays, CheckCircle2, Star,
   ArrowUp, MoreVertical, Download, Activity, Terminal,
@@ -25,6 +26,7 @@ function formatUptime(): string {
 }
 
 export default function OverviewPage() {
+  const router = useRouter();
   const [consoleOpen, setConsoleOpen] = useState(false);
   const { data, isLoading } = useOverviewData();
   const stats = data?.stats;
@@ -235,7 +237,10 @@ export default function OverviewPage() {
         <div className="lg:col-span-2 bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
           <div className="flex justify-between items-center px-6 py-3 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-900">Upcoming Sessions</h3>
-            <button className="text-blue-600 hover:text-blue-700 text-sm font-semibold transition-colors">View All</button>
+            <button
+              onClick={() => router.push('/bookings')}
+              className="text-blue-600 hover:text-blue-700 text-sm font-semibold transition-colors"
+            >View All</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left">
