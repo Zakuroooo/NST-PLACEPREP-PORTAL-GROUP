@@ -172,7 +172,26 @@ export default function OverviewPage() {
           <div className="flex justify-between items-center mb-4 pb-3 border-b border-gray-100">
             <h3 className="text-sm font-semibold text-gray-900">Sessions per Week</h3>
             <button
-              onClick={() => { window.open(`/api/admin/reports?type=system-utilization&format=csv`); }}
+              onClick={async () => {
+                try {
+                  // Must use fetch with credentials:'include' — window.open() is a plain
+                  // navigation that never sends HTTP-only cookies, causing 401 on requireAdmin().
+                  const res = await fetch(
+                    `/api/admin/reports?type=system-utilization&format=csv`,
+                    { credentials: 'include' }
+                  );
+                  if (!res.ok) throw new Error('Export failed');
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `system_utilization_${new Date().toISOString().slice(0, 10)}.csv`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                } catch {
+                  alert('CSV export failed. Please try again.');
+                }
+              }}
               className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors"
             >
               <Download className="w-4 h-4" /> Export CSV
