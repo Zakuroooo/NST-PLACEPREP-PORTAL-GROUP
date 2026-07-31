@@ -272,7 +272,8 @@ export default function OverviewPage() {
               </div>
               <div>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Req / min</p>
-                <span className="text-2xl font-bold">{(stats.requestsPerMinute ?? 0).toLocaleString()}</span>
+                <span className="text-2xl font-bold text-gray-500">N/A</span>
+                <p className="text-xs text-gray-600 mt-0.5">APM integration needed</p>
               </div>
             </div>
             <div>
@@ -350,7 +351,7 @@ export default function OverviewPage() {
           <div className="p-5 grid grid-cols-2 gap-5">
             {[
               { icon: Users,    label: "Active Users",   value: stats?.activeUsers?.toLocaleString() ?? "—",    sub: "online now",  color: "text-blue-400" },
-              { icon: Zap,      label: "Requests / min", value: (stats?.requestsPerMinute ?? 0).toLocaleString(), sub: "last 60 sec (real)", color: "text-indigo-400" },
+              { icon: Zap,      label: "Requests / min", value: "N/A", sub: "requires APM integration", color: "text-indigo-400" },
               { icon: Cpu,      label: "Server Load",    value: `${stats?.serverLoad ?? 0}%`,   sub: "active user density", color: "text-cyan-400" },
               { icon: HardDrive,label: "Uptime",          value: "N/A", sub: "APM integration needed", color: "text-gray-400" },
             ].map(m => (
