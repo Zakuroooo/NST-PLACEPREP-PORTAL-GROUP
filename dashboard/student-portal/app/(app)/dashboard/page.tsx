@@ -401,19 +401,30 @@ export default function DashboardPage() {
             {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
               <div key={i} className="text-[10px] text-gray-400 text-center">{d}</div>
             ))}
-            {thirtyDays.map((count, i) => {
-              return (
-                <div
-                  key={i}
-                  className={`h-3 w-full rounded-sm ${
-                    count >= 5 ? "bg-green-700" :
-                    count >= 3 ? "bg-green-500" :
-                    count >= 1 ? "bg-green-300" : "bg-gray-100"
-                  }`}
-                  title={count > 0 ? `${count} problems solved` : 'No activity'}
-                />
+            {(() => {
+              // Find what day-of-week the first of our 30 days fell on
+              // JS getDay(): 0=Sun,1=Mon...6=Sat → Mon-first offset: Mon=0, ..., Sun=6
+              const firstDay = new Date(today);
+              firstDay.setDate(firstDay.getDate() - 29);
+              const mondayOffset = (firstDay.getDay() + 6) % 7;
+              // Prepend empty cells so first data cell lands on correct column
+              const padded = [...Array(mondayOffset).fill(-1), ...thirtyDays];
+              return padded.map((count, i) =>
+                count === -1 ? (
+                  <div key={`pad-${i}`} className="h-3 w-full" />
+                ) : (
+                  <div
+                    key={i}
+                    className={`h-3 w-full rounded-sm ${
+                      count >= 5 ? "bg-green-700" :
+                      count >= 3 ? "bg-green-500" :
+                      count >= 1 ? "bg-green-300" : "bg-gray-100"
+                    }`}
+                    title={count > 0 ? `${count} problems solved` : 'No activity'}
+                  />
+                )
               );
-            })}
+            })()}
           </div>
           <div className="flex items-center gap-1.5 mt-2 text-[10px] text-gray-400">
             <span>Less</span>
