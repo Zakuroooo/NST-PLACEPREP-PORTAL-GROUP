@@ -367,7 +367,7 @@ export default function ManageFacultyPage() {
             </div>
             <h2 className="text-lg font-bold text-gray-900 text-center mb-2">Remove Faculty?</h2>
             <p className="text-sm text-gray-500 text-center mb-6">
-              This action will remove {"the selected faculty member"} from the faculty list. This cannot be undone.
+              This action will remove <span className="font-semibold text-gray-800">{faculty.find(f => (f._id ?? f.id) === removingFacultyId)?.fullName ?? faculty.find(f => (f._id ?? f.id) === removingFacultyId)?.name ?? 'the selected faculty member'}</span> from the faculty list. This cannot be undone.
             </p>
             <div className="flex gap-3">
               <button onClick={() => setRemovingFacultyId(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
