@@ -21,7 +21,10 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      const res = await fetch(`${STUDENT_LOGIN_URL}/api/auth/login`, {
+      // Auth is handled by the admin portal's own /api/auth/login route.
+      // Previously pointed at the Student Portal URL, which meant login
+      // failed entirely if the Student Portal dev server was not running.
+      const res = await fetch(`/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -129,10 +132,14 @@ export default function AdminLoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <label
+                htmlFor="admin-email"
+                className="text-xs font-medium text-gray-400 uppercase tracking-wider"
+              >
                 Admin Email
               </label>
               <input
+                id="admin-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -144,11 +151,15 @@ export default function AdminLoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <label
+                htmlFor="admin-password"
+                className="text-xs font-medium text-gray-400 uppercase tracking-wider"
+              >
                 Password
               </label>
               <div className="relative">
                 <input
+                  id="admin-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
