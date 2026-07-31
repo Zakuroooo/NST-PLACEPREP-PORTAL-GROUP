@@ -52,7 +52,7 @@ export default function CompaniesPage() {
 
   const filtered = allCompanies.filter((c) => {
     const matchesFilter = activeFilter === "All" || categoryMatch(c).includes(activeFilter);
-    const matchesSearch = !search.trim() || c.name.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = !search.trim() || c.name.toLowerCase().includes(search.trim().toLowerCase());
     return matchesFilter && matchesSearch;
   });
 
