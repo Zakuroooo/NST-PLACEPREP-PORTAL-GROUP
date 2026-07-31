@@ -284,9 +284,9 @@ export const studentService = {
         })
       );
       scored.sort((a, b) => b.score - a.score);
-      profiles = scored.slice(0, 10).map((s) => s.profile);
+      profiles = scored.slice(0, 100).map((s) => s.profile);
     } else {
-      profiles = await studentRepository.getLeaderboard(batch, 10);
+      profiles = await studentRepository.getLeaderboard(batch, 100);
     }
 
     // Batch-fetch doubts + session counts to avoid N+1

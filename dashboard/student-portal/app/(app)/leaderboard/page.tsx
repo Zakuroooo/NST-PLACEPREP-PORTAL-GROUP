@@ -22,6 +22,8 @@ export default function LeaderboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [period, setPeriod] = useState<"alltime" | "monthly">("alltime");
+  const [showAll, setShowAll] = useState(false);
+  const VISIBLE_LIMIT = 20;
 
   useEffect(() => {
     setIsLoading(true);
@@ -55,6 +57,7 @@ export default function LeaderboardPage() {
   const me = leaders.find((u) => u.isYou);
   const top3 = filtered.slice(0, 3);
   const rest = filtered.slice(3);
+  const visibleRest = showAll ? rest : rest.slice(0, VISIBLE_LIMIT);
 
   const podiumColors = [
     { bg: "bg-indigo-600", border: "border-indigo-200", badge: "bg-indigo-700", medal: "text-indigo-500" },
@@ -132,12 +135,25 @@ export default function LeaderboardPage() {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="text-center py-12 text-gray-400 text-sm">Loading leaderboard...</div>
-      ) : leaders.length === 0 ? (
-        <div className="text-center py-12 text-gray-400 text-sm">No data yet. Be the first to top the board!</div>
+      {leaders.length === 0 ? (
+        isLoading ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3" />
+            <div className="text-gray-400 text-sm">Loading leaderboard...</div>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-400 text-sm">No data yet. Be the first to top the board!</div>
+        )
       ) : (
-        <>
+        <div className="relative">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/60 z-10 flex items-start justify-center pt-20 backdrop-blur-[1px]">
+              <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-full shadow-lg border border-gray-100">
+                <div className="w-5 h-5 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                <span className="text-sm font-semibold text-gray-700">Updating...</span>
+              </div>
+            </div>
+          )}
           {/* Podium */}
           {top3.length >= 3 && (
             <div className="flex justify-center items-end gap-2 sm:gap-8 mb-8">
@@ -185,7 +201,7 @@ export default function LeaderboardPage() {
                   <div key={h} className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</div>
                 ))}
               </div>
-              {rest.map((u) => (
+              {visibleRest.map((u) => (
                 <div
                   key={u.rank}
                   className={`grid grid-cols-[80px_100px_1fr_150px_150px] gap-4 px-5 py-4 border-b border-gray-100 last:border-0 ${u.isYou ? "bg-indigo-50/50 border-indigo-100" : "hover:bg-gray-50"} transition-colors`}
@@ -205,13 +221,18 @@ export default function LeaderboardPage() {
                 </div>
               ))}
             </div>
-            <div className="flex justify-center py-4 border-t border-gray-100">
-              <button className="border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50">
-                View Top 100 <ChevronDown className="w-4 h-4" />
-              </button>
-            </div>
+            {rest.length > VISIBLE_LIMIT && (
+              <div className="flex justify-center py-4 border-t border-gray-100">
+                <button
+                  onClick={() => setShowAll(!showAll)}
+                  className="border border-gray-200 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-50"
+                >
+                  {showAll ? "Show Less" : "View All"} <ChevronDown className={`w-4 h-4 transition-transform ${showAll ? "rotate-180" : ""}`} />
+                </button>
+              </div>
+            )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

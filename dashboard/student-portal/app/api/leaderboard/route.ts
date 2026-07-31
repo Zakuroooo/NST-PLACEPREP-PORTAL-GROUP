@@ -21,6 +21,38 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ...entry,
       isCurrentUser: entry.studentId === auth.userId
     }));
+
+    // If current user is not in the top N, fetch their rank and append
+    if (!withCurrentUser.some(entry => entry.isCurrentUser)) {
+      const StudentProfile = (await import('placeprep-backend/src/models/StudentProfile')).default;
+      const currentUserProfile = await StudentProfile.findOne({ userId: auth.userId });
+      
+      if (currentUserProfile) {
+        const filter: any = { xpTotal: { $gt: currentUserProfile.xpTotal || 0 } };
+        if (batch) filter.batch = batch;
+        const rank = await StudentProfile.countDocuments(filter) + 1;
+        
+        const nameParts = (currentUserProfile.fullName || '').trim().split(' ');
+        const initials = nameParts.length >= 2
+          ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+          : (currentUserProfile.fullName?.slice(0, 2) ?? 'ST').toUpperCase();
+          
+        withCurrentUser.push({
+          rank,
+          studentId: currentUserProfile.userId.toString(),
+          name: currentUserProfile.fullName,
+          initials,
+          batch: currentUserProfile.batch,
+          branch: currentUserProfile.branch,
+          xp: currentUserProfile.xpTotal ?? 0,
+          tasksCompleted: 0,
+          doubtsRaised: 0,
+          placementStatus: currentUserProfile.placementStatus,
+          isCurrentUser: true
+        });
+      }
+    }
+
     return successResponse(withCurrentUser);
   } catch (error) {
     return handleApiError(error);

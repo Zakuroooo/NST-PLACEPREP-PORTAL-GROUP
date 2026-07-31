@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -37,16 +37,35 @@ function timeAgo(date: string | Date) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [checked, setChecked] = useState<Record<number, boolean>>({});
+  // Persist task checkboxes in localStorage so they survive a page refresh
+  const [checked, setChecked] = useState<Record<number, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem("student-tasks-checked");
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const toggleChecked = (id: number) => {
+    setChecked((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try { localStorage.setItem("student-tasks-checked", JSON.stringify(next)); } catch { /* quota exceeded */ }
+      return next;
+    });
+  };
 
   // Primary dashboard data
   const { data: apiData, isLoading, error } = useDashboard();
   // Recent interview experiences for the bottom section
   const { data: expData } = useSWR('/api/experiences?limit=3', fetcher);
 
-  if (error) {
-    toast.error("Could not load dashboard data. Showing cached view.");
-  }
+  // Only fire the error toast once when the error first appears, not on every re-render
+  useEffect(() => {
+    if (error) {
+      toast.error("Could not load dashboard data. Showing cached view.");
+    }
+  }, [error]);
 
   // Map roadmaps to company cards
   const targetCompanies = (apiData?.roadmaps || []).map((r: any) => ({
@@ -241,7 +260,7 @@ export default function DashboardPage() {
                     <div
                       key={q.id}
                       className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
-                      onClick={() => setChecked((c) => ({ ...c, [q.id]: !c[q.id] }))}
+                      onClick={() => toggleChecked(q.id)}
                     >
                       <button className="shrink-0" aria-label={checked[q.id] ? "Mark incomplete" : "Mark complete"}>
                         {checked[q.id] ? (
@@ -382,19 +401,30 @@ export default function DashboardPage() {
             {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
               <div key={i} className="text-[10px] text-gray-400 text-center">{d}</div>
             ))}
-            {thirtyDays.map((count, i) => {
-              return (
-                <div
-                  key={i}
-                  className={`h-3 w-full rounded-sm ${
-                    count >= 5 ? "bg-green-700" :
-                    count >= 3 ? "bg-green-500" :
-                    count >= 1 ? "bg-green-300" : "bg-gray-100"
-                  }`}
-                  title={count > 0 ? `${count} problems solved` : 'No activity'}
-                />
+            {(() => {
+              // Find what day-of-week the first of our 30 days fell on
+              // JS getDay(): 0=Sun,1=Mon...6=Sat → Mon-first offset: Mon=0, ..., Sun=6
+              const firstDay = new Date(today);
+              firstDay.setDate(firstDay.getDate() - 29);
+              const mondayOffset = (firstDay.getDay() + 6) % 7;
+              // Prepend empty cells so first data cell lands on correct column
+              const padded = [...Array(mondayOffset).fill(-1), ...thirtyDays];
+              return padded.map((count, i) =>
+                count === -1 ? (
+                  <div key={`pad-${i}`} className="h-3 w-full" />
+                ) : (
+                  <div
+                    key={i}
+                    className={`h-3 w-full rounded-sm ${
+                      count >= 5 ? "bg-green-700" :
+                      count >= 3 ? "bg-green-500" :
+                      count >= 1 ? "bg-green-300" : "bg-gray-100"
+                    }`}
+                    title={count > 0 ? `${count} problems solved` : 'No activity'}
+                  />
+                )
               );
-            })}
+            })()}
           </div>
           <div className="flex items-center gap-1.5 mt-2 text-[10px] text-gray-400">
             <span>Less</span>

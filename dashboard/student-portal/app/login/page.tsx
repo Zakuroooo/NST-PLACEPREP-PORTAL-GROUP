@@ -7,6 +7,12 @@ import { Eye, EyeOff, Loader2, GraduationCap, Trophy, BookOpen, Zap } from "luci
 const STUDENT_LOGIN_URL =
   process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || "http://localhost:3000";
 
+// Dedicated env vars — avoids fragile string replacement on the URL
+const FACULTY_PORTAL_URL =
+  process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL || "http://localhost:3001";
+const ADMIN_PORTAL_URL =
+  process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL || "http://localhost:3002";
+
 export default function StudentLoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -137,10 +143,11 @@ export default function StudentLoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <label htmlFor="student-email" className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Email
               </label>
               <input
+                id="student-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -152,11 +159,12 @@ export default function StudentLoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <label htmlFor="student-password" className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Password
               </label>
               <div className="relative">
                 <input
+                  id="student-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -200,11 +208,11 @@ export default function StudentLoginPage() {
           </div>
 
           <div className="mt-6 flex justify-center gap-4 text-xs text-gray-700">
-            <a href={`${STUDENT_LOGIN_URL.replace("3000", "3001")}/login`} className="hover:text-gray-500 transition-colors">
+            <a href={`${FACULTY_PORTAL_URL}/login`} className="hover:text-gray-500 transition-colors">
               Faculty Portal
             </a>
             <span>·</span>
-            <a href={`${STUDENT_LOGIN_URL.replace("3000", "3002")}/login`} className="hover:text-gray-500 transition-colors">
+            <a href={`${ADMIN_PORTAL_URL}/login`} className="hover:text-gray-500 transition-colors">
               Admin Portal
             </a>
           </div>
