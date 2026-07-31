@@ -11,7 +11,7 @@ import useSWR from "swr";
 
 import { useDashboard } from "@/lib/hooks";
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then((r) => r.json());
 
 // Prep Score — calculated from real product features only:
 // 1. Practice consistency: problems solved vs. assigned (45%)
@@ -38,7 +38,7 @@ function timeAgo(date: string | Date) {
 export default function DashboardPage() {
   const router = useRouter();
   // Persist task checkboxes in localStorage so they survive a page refresh
-  const [checked, setChecked] = useState<Record<number, boolean>>(() => {
+  const [checked, setChecked] = useState<Record<string | number, boolean>>(() => {
     try {
       const saved = localStorage.getItem("student-tasks-checked");
       return saved ? JSON.parse(saved) : {};
@@ -47,12 +47,27 @@ export default function DashboardPage() {
     }
   });
 
-  const toggleChecked = (id: number) => {
+  const toggleChecked = async (id: string | number) => {
+    // Optimistic UI update
     setChecked((prev) => {
       const next = { ...prev, [id]: !prev[id] };
       try { localStorage.setItem("student-tasks-checked", JSON.stringify(next)); } catch { /* quota exceeded */ }
       return next;
     });
+
+    try {
+      // Actually mark complete on backend
+      const res = await fetch(`/api/questions/${id}/complete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+      if (!res.ok) throw new Error('Failed to mark complete');
+    } catch (e) {
+      toast.error('Failed to sync progress with server');
+      // Rollback
+      setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
+    }
   };
 
   // Primary dashboard data
@@ -77,7 +92,7 @@ export default function DashboardPage() {
   }));
 
   const solved    = apiData?.stats?.problemsSolved   ?? 0;
-  const assigned  = apiData?.stats?.companiesOnRoadmap ? apiData.stats.companiesOnRoadmap * 20 : 1;
+  const assigned  = apiData?.stats?.totalAssigned ?? (apiData?.stats?.companiesOnRoadmap ? apiData.stats.companiesOnRoadmap * 20 : 1);
   const streak    = apiData?.stats?.currentStreakDays ?? 0;
   const xp        = apiData?.stats?.xpTotal           ?? 0;
   const targetXp  = apiData?.stats?.targetXp          ?? 5000;
