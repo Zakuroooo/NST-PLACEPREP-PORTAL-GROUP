@@ -423,28 +423,29 @@ export default function OverviewPage() {
             </div>
           </div>
 
-          {/* Log terminal — driven by real backend stats */}
+          {/* Log terminal — driven by real backend stats, timestamps fixed at load time */}
           <div className="mx-5 mb-5 bg-black rounded-xl border border-gray-800 p-5 font-mono text-xs space-y-1 h-28 overflow-y-auto">
             {(() => {
               if (!stats) return null;
-              const now = Date.now();
-              // Build real log lines from actual backend data
-              const lines: { msg: string; c: string; offset: number }[] = [
-                { msg: `[INFO]  Active users online: ${stats.activeUsers}`, c: "text-emerald-400", offset: 0 },
-                { msg: `[INFO]  Sessions booked this week: ${stats.sessionsBooked}`, c: "text-blue-400", offset: 4000 },
-                { msg: `[INFO]  Pending doubts in queue: ${stats.pendingDoubts ?? stats.doubtsRaised}`, c: "text-indigo-400", offset: 8000 },
-                { msg: `[INFO]  Avg satisfaction score: ${stats.avgSatisfaction?.toFixed(2) ?? 'N/A'} / 5`, c: "text-cyan-400", offset: 12000 },
+              // Compute a stable base timestamp once (the time the console was opened)
+              // so log lines do NOT flash/change on every React re-render.
+              const baseTime = new Date();
+              const lines: { msg: string; c: string; secOffset: number }[] = [
+                { msg: `[INFO]  Active users online: ${stats.activeUsers}`, c: "text-emerald-400", secOffset: 0 },
+                { msg: `[INFO]  Sessions booked this week: ${stats.sessionsBooked}`, c: "text-blue-400", secOffset: -1 },
+                { msg: `[INFO]  Pending doubts in queue: ${stats.pendingDoubts ?? stats.doubtsRaised}`, c: "text-indigo-400", secOffset: -2 },
+                { msg: `[INFO]  Avg satisfaction score: ${stats.avgSatisfaction?.toFixed(2) ?? 'N/A'} / 5`, c: "text-cyan-400", secOffset: -3 },
                 {
                   msg: stats.serverLoad > 60
                     ? `[WARN]  Server load elevated: ${stats.serverLoad}%`
                     : `[INFO]  Server load normal: ${stats.serverLoad}%`,
                   c: stats.serverLoad > 60 ? "text-amber-400" : "text-emerald-400",
-                  offset: 16000,
+                  secOffset: -4,
                 },
-                { msg: `[INFO]  Placed students: ${stats.placedStudents} (${stats.placementRate}%)`, c: "text-emerald-400", offset: 20000 },
+                { msg: `[INFO]  Placed students: ${stats.placedStudents} (${stats.placementRate}%)`, c: "text-emerald-400", secOffset: -5 },
               ];
               return lines.map((line, i) => {
-                const t = new Date(now - line.offset);
+                const t = new Date(baseTime.getTime() + line.secOffset * 1000);
                 const ts = `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`;
                 return (
                   <div key={i} className="flex gap-2">
