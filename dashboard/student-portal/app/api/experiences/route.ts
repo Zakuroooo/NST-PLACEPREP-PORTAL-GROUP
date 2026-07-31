@@ -71,7 +71,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       source: 'nst_internal',
     });
 
-    return successResponse(experience, {
+    if (profile) {
+      await studentRepository.updateByUserId(user.userId, { xpTotal: (profile.xpTotal || 0) + 50 });
+    }
+
+    return successResponse({ experience, xpEarned: 50 }, {
       status: 201,
       message: 'Experience submitted! It will appear after admin verification.',
     });
