@@ -77,7 +77,7 @@ export default function StudentsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Students</h1>
           <p className="text-sm text-gray-500 mt-0.5">{totalCount} enrolled · {batches} active batches</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
             <input
@@ -87,7 +87,7 @@ export default function StudentsPage() {
               onChange={e => setSearchInput(e.target.value)}
             />
           </div>
-          {/* Batch pills */}
+          {/* Batch pills — desktop */}
           <div className="hidden sm:flex items-center gap-1">
             {BATCH_OPTIONS.map(b => (
               <button
@@ -103,6 +103,14 @@ export default function StudentsPage() {
               </button>
             ))}
           </div>
+          {/* Batch select — mobile (replaces hidden pills so mobile users can filter too) */}
+          <select
+            className="sm:hidden px-2.5 py-1.5 rounded-lg text-sm font-semibold bg-gray-100 text-gray-600 border-0 focus:ring-2 focus:ring-blue-500/20"
+            value={selectedBatch}
+            onChange={e => { setSelectedBatch(e.target.value); setCurrentPage(1); }}
+          >
+            {BATCH_OPTIONS.map(b => <option key={b} value={b}>{b === 'All' ? 'All Batches' : `Batch ${b}`}</option>)}
+          </select>
           {(searchInput || selectedBatch !== "All") && (
             <button
               onClick={() => { setSearchInput(""); setSelectedBatch("All"); setCurrentPage(1); }}
