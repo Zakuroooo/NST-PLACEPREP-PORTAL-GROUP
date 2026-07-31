@@ -308,7 +308,7 @@ export default function ManageFacultyPage() {
               <button onClick={() => setIsAddModalOpen(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-700 hover:bg-gray-50 transition-colors">
                 Cancel
               </button>
-              <button onClick={submitNewFaculty} disabled={!newFaculty.name || !newFaculty.email} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              <button onClick={submitNewFaculty} disabled={!newFaculty.name || !newFaculty.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newFaculty.email)} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
                 Send Invitation
               </button>
             </div>
