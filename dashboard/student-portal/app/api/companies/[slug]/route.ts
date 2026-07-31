@@ -26,7 +26,7 @@ export async function GET(
 
     // Fetch related questions and verified experiences in parallel
     const [{ questions }, { experiences }] = await Promise.all([
-      questionRepository.findMany({ companySlug: slug, limit: 10 }),
+      questionRepository.findMany({ companySlug: slug, limit: 100 }),
       experienceRepository.findAll({ companySlug: slug, verified: true, limit: 5 }),
     ]);
 
