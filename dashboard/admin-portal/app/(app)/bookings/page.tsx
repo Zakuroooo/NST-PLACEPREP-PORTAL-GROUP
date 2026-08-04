@@ -108,7 +108,7 @@ export default function BookingsPage() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
               <XAxis dataKey="date" tick={{ fontSize: 9 }} tickFormatter={(v) => v.slice(5)} />
-              <YAxis tick={{ fontSize: 9 }} />
+              <YAxis tick={{ fontSize: 9 }} allowDecimals={false} domain={[0, 'auto']} />
               <Tooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e5e7eb" }} />
               <Area type="monotone" dataKey="count" name="Bookings" stroke="#6366f1" strokeWidth={1.5} fill="url(#gradBooking)" dot={false} />
             </AreaChart>
