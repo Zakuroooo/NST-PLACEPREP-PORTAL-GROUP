@@ -42,7 +42,7 @@ export async function apiFetch<T = unknown>(
 export function useDashboard() {
   const { data, error, isLoading } = useSWR('/api/dashboard', fetcher, {
     revalidateOnFocus: true,
-    dedupingInterval: 30_000,
+    dedupingInterval: 5_000, // reduced from 30s so roadmap additions are reflected quickly
   });
   return { data, error, isLoading };
 }
@@ -90,7 +90,12 @@ export async function addRoadmapCompany(data: { companySlug: string; targetRole:
     method: 'POST',
     body: JSON.stringify(data),
   });
-  await globalMutate('/api/user/me/roadmap');
+  // Revalidate both roadmap AND dashboard so the new company is instantly visible
+  // on the home page without requiring a manual page refresh.
+  await Promise.all([
+    globalMutate('/api/user/me/roadmap'),
+    globalMutate('/api/dashboard'),
+  ]);
   return result;
 }
 
