@@ -83,11 +83,6 @@ export default function ProgressPage() {
 
   const DAY_LABELS = ["", "Mon", "", "Wed", "", "Fri", ""];
 
-  if (loadingDash || loadingRoadmaps || loadingProgress) {
-    return <div className="p-8 text-center text-gray-500">Loading progress...</div>;
-  }
-
-
   const roadmaps = Array.isArray(roadmapsData) ? roadmapsData : (roadmapsData?.data || []);
   const topicProgress = Array.isArray(progressData) ? progressData : (progressData?.data || []);
 
@@ -147,6 +142,10 @@ export default function ProgressPage() {
     color: t.textColor,
     bgColor: bgColors[idx % bgColors.length]
   }));
+
+  if (loadingDash || loadingRoadmaps || loadingProgress) {
+    return <div className="p-8 text-center text-gray-500">Loading progress...</div>;
+  }
 
   return (
     <div className="max-w-5xl">
