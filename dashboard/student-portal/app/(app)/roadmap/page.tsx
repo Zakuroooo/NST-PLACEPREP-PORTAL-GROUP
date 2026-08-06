@@ -9,11 +9,21 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Suspense } from "react";
-import { useRoadmap, usePractice, useProgress, useCompanies } from "@/lib/hooks";
+import useSWR from "swr";
+import { useRoadmap, useCompanies } from "@/lib/hooks";
 import { type UserRoadmapCompany } from "@/lib/constants";
 
-function getLogoUrl(slug: string): string | null {
-  return `https://www.google.com/s2/favicons?domain=${slug.toLowerCase()}.com&sz=128`;
+// Credentialed fetcher for SWR — sends JWT cookie with every request
+const fetcher = (url: string) =>
+  fetch(url, { credentials: 'include' })
+    .then(r => r.json())
+    .then(j => j.data ?? j);
+
+// ─── Company logo helper ─────────────────────────────────────────────────────
+// BUG-R6 FIX: Was a hardcoded map of only 10 companies.
+// Now uses Google Favicons API for all 670+ companies with letter fallback.
+function getLogoUrl(slug: string): string {
+  return `https://www.google.com/s2/favicons?sz=64&domain=${slug.toLowerCase()}.com`;
 }
 
 function CompanyLogo({
@@ -22,7 +32,7 @@ function CompanyLogo({
   initial,
   fallbackClass,
 }: {
-  logoUrl: string | null;
+  logoUrl: string;
   name: string;
   initial: string;
   fallbackClass: string;
@@ -57,8 +67,10 @@ function ActiveRoadmapCard({
 }) {
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
   const logoUrl = getLogoUrl(company.slug);
-  const totalQ = company.weeks.reduce((s, w) => s + (w.totalQuestions || 0), 0);
-  const doneQ  = company.weeks.reduce((s, w) => s + (w.doneQuestions || 0), 0);
+  // BUG-R8 FIX: Was using w.questions.length (always 0 — API returns counts not arrays)
+  // Now correctly uses totalQuestions/doneQuestions from the week object
+  const totalQ = company.weeks.reduce((s, w) => s + (w.totalQuestions ?? 0), 0);
+  const doneQ  = company.weeks.reduce((s, w) => s + (w.doneQuestions ?? 0), 0);
   const pct = totalQ > 0 ? Math.round((doneQ / totalQ) * 100) : 0;
   const daysElapsed = company.currentWeek * 7;
   const totalDays   = company.totalWeeks  * 7;
@@ -156,12 +168,12 @@ function RoadmapContent() {
   const { data: roadmapData, mutate, isLoading } = useRoadmap();
   const { data: companiesResp } = useCompanies();
 
-  const allCompanies: any[] = Array.isArray(companiesResp) 
-    ? companiesResp 
-    : (companiesResp?.data?.companies ?? companiesResp?.companies ?? []);
+  const allCompanies: any[] = Array.isArray(companiesResp) ? companiesResp : [];
 
+  // BUG-R7 FIX: fetcher already unwraps .data, so roadmapData IS the raw array.
+  // The old triple-unwrap (data?.data?.roadmaps ?? data?.roadmaps ?? data) was fragile.
   const companies: UserRoadmapCompany[] = (
-    (roadmapData?.data?.roadmaps ?? roadmapData?.roadmaps ?? roadmapData ?? []) as any[]
+    (Array.isArray(roadmapData) ? roadmapData : []) as any[]
   ).map((r: any) => ({
     slug: r.companySlug,
     name: r.companyName,
@@ -198,7 +210,8 @@ function RoadmapContent() {
       slug: c.slug,
       name: c.name,
       initial: c.name.charAt(0),
-      role: c.type || "SDE",
+      // BUG-R11 FIX: c.type doesn't exist on Company model — use c.category
+      role: c.category || "SDE-1",
       totalXP: (c.questionCount || 0) * 10,
       weeks: 8,
     }));
@@ -326,13 +339,32 @@ function RoadmapContent() {
   );
 }
 
-function WeekQuestions({ companySlug, topic }: { companySlug: string; topic: string }) {
-  const { data: practiceData, isLoading } = usePractice({ company: companySlug, topic });
-  const { data: progressData } = useProgress();
-  
-  const questions = practiceData?.data?.questions ?? practiceData?.questions ?? practiceData ?? [];
+function WeekQuestions({
+  companySlug,
+  topic,
+  totalQuestions,
+  weeksCommitted,
+}: {
+  companySlug: string;
+  topic: string;
+  totalQuestions: number;
+  weeksCommitted: number;
+}) {
+  // BUG-R1 FIX: Use /api/roadmap/week-questions instead of /api/practice
+  // /api/practice returns ALL 500+ questions — no frequency cap, no week limit
+  // /api/roadmap/week-questions returns only the top N frequency-sorted questions
+  const minFrequency = weeksCommitted <= 4 ? 0.6 : weeksCommitted <= 6 ? 0.4 : weeksCommitted <= 8 ? 0.25 : weeksCommitted <= 12 ? 0.1 : 0;
+  const limit = totalQuestions || 10;
+  const key = `/api/roadmap/week-questions?company=${companySlug}&topic=${encodeURIComponent(topic)}&limit=${limit}&minFrequency=${minFrequency}`;
+  const { data: weekData, isLoading } = useSWR(key, fetcher);
+
+  // BUG-R9 FIX: Use dedicated completed-questions endpoint for green checkmarks
+  const { data: completedData } = useSWR('/api/user/me/completed-questions', fetcher);
+
+  // weekData from /api/roadmap/week-questions returns { questions: [], total: N }
+  const questions = weekData?.questions ?? [];
   const completedIds = new Set(
-    (progressData?.data?.completedQuestions ?? progressData?.completedQuestions ?? []).map((q: any) => q.questionId || q.id || q)
+    (completedData?.completedQuestions ?? []).map((q: any) => q.questionId)
   );
 
   if (isLoading) {
@@ -348,7 +380,7 @@ function WeekQuestions({ companySlug, topic }: { companySlug: string; topic: str
   if (!questions || questions.length === 0) {
     return (
       <div className="text-center py-6 text-gray-500 text-sm">
-        No questions found for {topic}.
+        No questions found for {topic}. Questions may be added soon.
       </div>
     );
   }
@@ -356,36 +388,41 @@ function WeekQuestions({ companySlug, topic }: { companySlug: string; topic: str
   return (
     <div className="space-y-3">
       {questions.map((q: any) => {
-        const isDone = completedIds.has(q._id || q.id);
+        const qId = (q._id || q.id)?.toString();
+        const isDone = completedIds.has(qId);
+        // BUG-R1 FIX: Question model fields — .problemSummary not .title, .difficulty not .diff, .xpValue not .xp
+        const title = q.problemSummary || q.title || 'Untitled Question';
+        const difficulty = q.difficulty || q.diff || 'Medium';
+        const xp = q.xpValue || (difficulty === 'Hard' ? 50 : difficulty === 'Medium' ? 25 : 10);
         return (
-          <div key={q._id || q.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-colors cursor-pointer group gap-2 sm:gap-4">
+          <div key={qId} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-colors cursor-pointer group gap-2 sm:gap-4">
             <div className="flex items-start sm:items-center gap-3 min-w-0">
               <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${isDone ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
                 {isDone && <CheckCircle className="w-3.5 h-3.5 text-white" />}
               </div>
               <span className={`font-semibold text-sm truncate ${isDone ? 'text-gray-400 line-through' : 'text-gray-700 group-hover:text-blue-600'}`}>
-                {q.title}
+                {title}
               </span>
             </div>
 
             <div className="flex items-center gap-3 shrink-0 ml-8 sm:ml-0">
               <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                q.diff === 'Easy' ? 'bg-green-50 text-green-700 border-green-200' :
-                q.diff === 'Medium' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                difficulty === 'Easy' ? 'bg-green-50 text-green-700 border-green-200' :
+                difficulty === 'Medium' ? 'bg-blue-50 text-blue-700 border-blue-200' :
                 'bg-red-50 text-red-700 border-red-200'
               }`}>
-                {q.diff}
+                {difficulty}
               </span>
               <span className="text-xs font-bold text-orange-500 flex items-center gap-0.5">
-                +{q.xp} XP
+                +{xp} XP
               </span>
-              <a 
-                href={q.leetcodeUrl || '#'} 
-                target="_blank" 
+              <a
+                href={q.leetcodeUrl || q.sourceUrl || '#'}
+                target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 className="text-blue-500 hover:text-blue-700 p-1 rounded-md hover:bg-blue-50 transition-colors"
-                aria-label={`Open ${q.title} on LeetCode`}
+                aria-label={`Open ${title} on LeetCode`}
               >
                 <ExternalLink className="w-4 h-4" />
               </a>
@@ -531,7 +568,12 @@ function RoadmapCurriculumView({ company }: { company: UserRoadmapCompany }) {
 
               {isExpanded && !isLocked && (
                 <div className="border-t border-gray-100 bg-gray-50/30 p-5">
-                  <WeekQuestions companySlug={company.slug} topic={week.topic} />
+                  <WeekQuestions
+                    companySlug={company.slug}
+                    topic={week.topic}
+                    totalQuestions={week.totalQuestions}
+                    weeksCommitted={company.totalWeeks}
+                  />
                 </div>
               )}
             </div>

@@ -6,8 +6,7 @@ import { ArrowLeft, ExternalLink, Search, X, Monitor, Building, Calculator, User
 const IconMap: Record<string, React.ElementType> = {
   Monitor, Building, Calculator, Users, Zap, GraduationCap, Target, FileText
 };
-import { usePractice, useCompanies } from "@/lib/hooks";
-import useSWR from "swr";
+import { usePractice, useCompanies, usePracticeStats, useTopics } from "@/lib/hooks";
 import { practiceCategories, type PracticeCategory, type Difficulty } from "@/lib/constants";
 
 // ── Difficulty badge colours ─────────────────────────
@@ -21,11 +20,14 @@ function CategoryCard({
   cat,
   active,
   onClick,
+  dynamicTotal,
 }: {
   cat: PracticeCategory;
   active: boolean;
   onClick: () => void;
+  dynamicTotal?: number;
 }) {
+  const count = dynamicTotal ?? cat.totalQuestions;
   return (
     <button
       onClick={onClick}
@@ -53,7 +55,7 @@ function CategoryCard({
       </div>
       <div className="text-xs text-gray-500 mb-3 line-clamp-2">{cat.description}</div>
       <div className={`text-xs font-semibold ${active ? "text-blue-600" : cat.textColor}`}>
-        {cat.totalQuestions.toLocaleString()}+ questions
+        {count.toLocaleString()}+ questions
       </div>
     </button>
   );
@@ -64,9 +66,7 @@ function PracticeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
-  const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then((r) => r.json());
-  const { data: topicsData } = useSWR('/api/topics', fetcher);
-  const allTopics = topicsData?.data?.topics ?? topicsData?.topics ?? [];
+
 
   // Which category is active (from URL or selection)
   const [activeCategory, setActiveCategory] = useState<string | null>(
@@ -80,6 +80,9 @@ function PracticeContent() {
   const [difficulty, setDifficulty] = useState<Difficulty | "">(
     (searchParams.get("difficulty") as Difficulty) ?? ""
   );
+
+  const { data: statsData } = usePracticeStats();
+  const roundTypeCounts = statsData?.roundTypeCounts || {};
 
   // Sync URL when category changes
   useEffect(() => {
@@ -102,15 +105,19 @@ function PracticeContent() {
     topic,
     difficulty,
     company,
-    roundType: activeCat?.roundTypes?.join(',')
+    roundType: activeCat?.roundTypes?.join(","),
   });
   
   const { data: companiesData } = useCompanies();
-  const allCompanySlugs = companiesData?.data?.companies ?? companiesData?.companies ?? [];
-  const rawQuestions = practiceData?.data?.questions ?? practiceData?.questions ?? [];
+  const allCompanySlugs = Array.isArray(companiesData) ? companiesData : [];
+  
+  const { data: topicsData } = useTopics();
+  const allTopics = Array.isArray(topicsData) ? topicsData : [];
+
+  const rawQuestions = practiceData?.questions ?? [];
 
   // Map backend field names → UI field names
-  // Backend: problemSummary, difficulty, xpValue, companySlugs, topicTag
+  // Backend: problemSummary, difficulty, xpValue, companySlug (singular), topicTag
   // UI reads: title, diff, xp, companies, topic
   const allQuestions = rawQuestions.map((q: any) => ({
     ...q,
@@ -119,7 +126,8 @@ function PracticeContent() {
     diff:      q.diff      ?? q.difficulty     ?? '',
     xp:        q.xp        ?? q.xpValue        ?? 0,
     topic:     q.topic     ?? q.topicTag       ?? '',
-    companies: q.companies ?? q.companySlugs   ?? [],
+    // BUG-P5 FIX: backend field is companySlug (singular), not companySlugs
+    companies: q.companies ?? (q.companySlug ? [q.companySlug] : []),
     hot:       q.hot       ?? q.isHot          ?? false,
     leetcodeUrl: q.leetcodeUrl ?? q.externalUrl ?? null,
   }));
@@ -160,14 +168,18 @@ function PracticeContent() {
 
       {/* Category Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        {practiceCategories.map((cat) => (
-          <CategoryCard
-            key={cat.id}
-            cat={cat}
-            active={activeCategory === cat.id}
-            onClick={() => handleSelectCategory(cat.id)}
-          />
-        ))}
+        {practiceCategories.map((cat) => {
+          const dynamicTotal = cat.roundTypes.reduce((sum, rt) => sum + (roundTypeCounts[rt] || 0), 0) || undefined;
+          return (
+            <CategoryCard
+              key={cat.id}
+              cat={cat}
+              active={activeCategory === cat.id}
+              onClick={() => handleSelectCategory(cat.id)}
+              dynamicTotal={dynamicTotal}
+            />
+          );
+        })}
       </div>
 
       {/* Question list panel — shown only when a category is selected */}

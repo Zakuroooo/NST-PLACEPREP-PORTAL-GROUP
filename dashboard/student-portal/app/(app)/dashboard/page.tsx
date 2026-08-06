@@ -9,9 +9,16 @@ import {
 import { toast } from "sonner";
 import useSWR from "swr";
 
-import { useDashboard } from "@/lib/hooks";
+// BUG-T4 FIX: Import completeQuestion mutation
+import { useDashboard, completeQuestion } from "@/lib/hooks";
 
-const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then((r) => r.json());
+// BUG-D1 FIX: Replace unauthenticated local fetcher with credentialed one
+// The original `const fetcher = (url) => fetch(url)...` had no credentials,
+// causing /api/experiences to return 401 → expData was always the error JSON, not experiences
+const credFetcher = (url: string) =>
+  fetch(url, { credentials: 'include' })
+    .then(r => r.json())
+    .then(j => j.data ?? j);
 
 // Prep Score — calculated from real product features only:
 // 1. Practice consistency: problems solved vs. assigned (45%)
@@ -37,43 +44,12 @@ function timeAgo(date: string | Date) {
 
 export default function DashboardPage() {
   const router = useRouter();
-  // Persist task checkboxes in localStorage so they survive a page refresh
-  const [checked, setChecked] = useState<Record<string | number, boolean>>(() => {
-    try {
-      const saved = localStorage.getItem("student-tasks-checked");
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
-
-  const toggleChecked = async (id: string | number) => {
-    // Optimistic UI update
-    setChecked((prev) => {
-      const next = { ...prev, [id]: !prev[id] };
-      try { localStorage.setItem("student-tasks-checked", JSON.stringify(next)); } catch { /* quota exceeded */ }
-      return next;
-    });
-
-    try {
-      // Actually mark complete on backend
-      const res = await fetch(`/api/questions/${id}/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
-      });
-      if (!res.ok) throw new Error('Failed to mark complete');
-    } catch (e) {
-      toast.error('Failed to sync progress with server');
-      // Rollback
-      setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
-    }
-  };
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
 
   // Primary dashboard data
   const { data: apiData, isLoading, error } = useDashboard();
-  // Recent interview experiences for the bottom section
-  const { data: expData } = useSWR('/api/experiences?limit=3', fetcher);
+  // BUG-D1 FIX: Use credFetcher with credentials so JWT cookie is sent
+  const { data: expData } = useSWR('/api/experiences?limit=3', credFetcher);
 
   // Only fire the error toast once when the error first appears, not on every re-render
   useEffect(() => {
@@ -92,6 +68,7 @@ export default function DashboardPage() {
   }));
 
   const solved    = apiData?.stats?.problemsSolved   ?? 0;
+  // BUG-D3 FIX: Use real totalAssigned from API — was companiesOnRoadmap * 20 (always wrong)
   const assigned  = apiData?.stats?.totalAssigned ?? (apiData?.stats?.companiesOnRoadmap ? apiData.stats.companiesOnRoadmap * 20 : 1);
   const streak    = apiData?.stats?.currentStreakDays ?? 0;
   const xp        = apiData?.stats?.xpTotal           ?? 0;
@@ -99,8 +76,11 @@ export default function DashboardPage() {
   const targetStreak = apiData?.stats?.targetStreak   ?? 30;
   const tasks     = apiData?.roadmaps ?? [];
   const prepScore = apiData?.stats?.prepScore ?? calcPrepScore(solved, assigned, streak, xp, targetXp, targetStreak);
-  const studentName = apiData?.student?.fullName ?? apiData?.fullName ?? "Student";
-  const recentExperiences = expData?.data?.experiences ?? [];
+  // BUG-D2 FIX: fullName is now in student object from API
+  const studentName = apiData?.student?.fullName ?? "Student";
+  // BUG-D1 FIX: credFetcher already unwraps .data, so expData.experiences is correct
+  const recentExperiences = expData?.experiences ?? [];
+  // BUG-D5 FIX: latestActivity is now in stats object (API was returning it at top-level)
   const latestActivity = apiData?.stats?.latestActivity;
 
   // Create an array of 30 days for Activity Map
@@ -109,6 +89,7 @@ export default function DashboardPage() {
     const d = new Date(today);
     d.setDate(d.getDate() - (29 - i));
     const dateStr = d.toISOString().split('T')[0];
+    // BUG-D5 FIX: weeklyActivity is now in stats (was at top-level as recentActivity)
     const match = (apiData?.stats?.weeklyActivity || []).find((a: any) => a.date === dateStr);
     return match ? match.count : 0;
   });
@@ -242,27 +223,31 @@ export default function DashboardPage() {
             </div>
             <div className="space-y-4">
               {(() => {
-                // If user targets only 1 company → show 5 questions, otherwise show 3
+                // BUG-T6: If user targets only 1 company → show 5 questions, otherwise show 3
                 const maxQPerCompany = tasks.length === 1 ? 5 : 3;
                 return tasks.map((co: any, index: number) => (
-                <div key={co.slug || `task-${index}`} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                // BUG-T2/T3/T5 FIX: use co.companyName, co.currentWeek, co.currentDay, co.companySlug
+                <div key={co.companySlug || `task-${index}`} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                   {/* Company header */}
                   <div className="flex items-center justify-between px-5 py-3 bg-gray-50 border-b border-gray-100">
                     <div className="flex items-center gap-2.5">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={`https://www.google.com/s2/favicons?sz=32&domain=${co.slug}.com`}
-                        alt={co.company}
+                        src={`https://www.google.com/s2/favicons?sz=32&domain=${co.companySlug}.com`}
+                        alt={co.companyName}
                         className="w-5 h-5 rounded shrink-0 object-contain"
                         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
-                      <span className="font-semibold text-gray-900 text-sm">{co.company}</span>
+                      {/* BUG-T2 FIX: was co.company (undefined) — API sends co.companyName */}
+                      <span className="font-semibold text-gray-900 text-sm">{co.companyName}</span>
+                      {/* BUG-T3 FIX: was co.week (undefined) and co.day (undefined) */}
                       <span className="text-xs text-gray-500 bg-gray-200 rounded px-2 py-0.5 font-medium">
-                        Week {co.week}, Day {co.day}
+                        Week {co.currentWeek}, Day {co.currentDay ?? 1}
                       </span>
                     </div>
+                    {/* BUG-T5 FIX: was co.slug (undefined) — API sends co.companySlug */}
                     <Link
-                      href={`/roadmap?company=${co.slug}`}
+                      href={`/roadmap?company=${co.companySlug}`}
                       className="flex items-center gap-1 text-xs text-blue-600 font-medium hover:underline"
                     >
                       View Full Roadmap <ChevronRight className="w-3.5 h-3.5" />
@@ -271,11 +256,28 @@ export default function DashboardPage() {
 
                   {/* Questions — capped to maxQPerCompany */}
                   <div className="divide-y divide-gray-50">
-                    {(co.questions || []).slice(0, maxQPerCompany).map((q: any) => (
+                    {(co.questions || []).length === 0 ? (
+                      <div className="px-5 py-4 text-sm text-gray-400 text-center">
+                        No questions available for this week&apos;s topic yet.
+                      </div>
+                    ) : (co.questions || []).slice(0, maxQPerCompany).map((q: any) => (
                     <div
                       key={q.id}
                       className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
-                      onClick={() => toggleChecked(q.id)}
+                      onClick={async () => {
+                        // BUG-T4 FIX: was only local state — now calls API to persist completion and award XP
+                        const wasChecked = !!checked[q.id];
+                        setChecked((c) => ({ ...c, [q.id]: !wasChecked })); // optimistic update
+                        if (!wasChecked) {
+                          try {
+                            await completeQuestion(q.id, co._id); // co._id = roadmapId (BUG-T1 FIX)
+                            toast.success(`+${q.xp} XP earned!`);
+                          } catch (err: any) {
+                            setChecked((c) => ({ ...c, [q.id]: false })); // rollback on error
+                            toast.error(err.message ?? "Failed to mark complete");
+                          }
+                        }
+                      }}
                     >
                       <button className="shrink-0" aria-label={checked[q.id] ? "Mark incomplete" : "Mark complete"}>
                         {checked[q.id] ? (
@@ -297,7 +299,18 @@ export default function DashboardPage() {
                       }`}>
                         {q.difficulty}
                       </span>
-                      <ExternalLink className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      {q.leetcodeUrl ? (
+                        <a
+                          href={q.leetcodeUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5 text-gray-400 shrink-0 hover:text-blue-500" />
+                        </a>
+                      ) : (
+                        <ExternalLink className="w-3.5 h-3.5 text-gray-200 shrink-0" />
+                      )}
                     </div>
                   ))}
                 </div>

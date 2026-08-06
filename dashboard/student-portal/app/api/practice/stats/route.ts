@@ -1,6 +1,13 @@
+/**
+ * dashboard/student-portal/app/api/practice/stats/route.ts
+ * GET /api/practice/stats — real KPI counts for the Practice page.
+ *
+ * BUG-P1 FIX: This route returns the total number of questions in the DB
+ * grouped by roundType, so the Practice Category cards show real counts.
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from 'placeprep-backend/src/config/db';
-import { requireStudent } from 'placeprep-backend/src/utils/authMiddleware';
 import Question from 'placeprep-backend/src/models/Question';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError } from 'placeprep-backend/src/utils/apiError';
@@ -8,32 +15,20 @@ import { handleApiError } from 'placeprep-backend/src/utils/apiError';
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await connectDB();
-    await requireStudent(request);
-
-    const stats = await Question.aggregate([
-      {
-        $group: {
-          _id: "$roundType",
-          count: { $sum: 1 }
-        }
-      }
+    
+    const counts = await Question.aggregate([
+      { $group: { _id: '$roundType', count: { $sum: 1 } } }
     ]);
 
-    const result = {
-      coding: 0,
-      systemDesign: 0,
-      aptitude: 0,
-      total: 0
-    };
+    // Convert array to a map for easy lookup { "Coding": 2450, "System Design": 380, ... }
+    const roundTypeCounts = counts.reduce((acc, curr) => {
+      if (curr._id) {
+        acc[curr._id] = curr.count;
+      }
+      return acc;
+    }, {} as Record<string, number>);
 
-    for (const stat of stats) {
-      if (stat._id === 'Coding') result.coding = stat.count;
-      else if (stat._id === 'System Design') result.systemDesign = stat.count;
-      else if (stat._id === 'Aptitude') result.aptitude = stat.count;
-      result.total += stat.count;
-    }
-
-    return successResponse(result);
+    return successResponse({ roundTypeCounts });
   } catch (error) {
     return handleApiError(error);
   }

@@ -109,7 +109,7 @@ export const studentService = {
     let latestActivity = null;
     if (latestCompletion && latestCompletion.questionId) {
       latestActivity = {
-        title: (latestCompletion.questionId as any).title,
+        title: (latestCompletion.questionId as any).problemSummary, // BUG-D4 FIX: Question has no .title field
         completedAt: latestCompletion.completedAt,
       };
     }
