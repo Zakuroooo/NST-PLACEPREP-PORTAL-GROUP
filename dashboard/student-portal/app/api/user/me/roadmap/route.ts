@@ -9,6 +9,9 @@
  *   BUG-R2: questionsPerWeek now scales with preparationWeeks duration
  *   BUG-R4: minFrequency threshold applied — shorter plans show only hottest questions
  *   Section 13 of audit: Full roadmap generation algorithm implemented
+ *   FIX: company._id from aggregate wrapped in new ObjectId (was plain object)
+ *   FIX: E11000 duplicate key now returns 400 instead of 500
+ *   FIX: question query errors are caught per-week and fall back gracefully
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,6 +27,7 @@ import {
   getClientIp,
   RATE_LIMITS,
 } from 'placeprep-backend/src/utils/rateLimiter';
+import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -40,13 +44,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  * BUG-R2 FIX: Compute questionsPerWeek and minFrequency based on prep duration.
  * Shorter plans = more intense (fewer but hotter questions per week).
  * Longer plans  = broader coverage (more questions, lower frequency bar).
- *
- * Aligns with Section 13 of the audit report:
- *   4-week:  15 q/week, minFreq 0.6 (top 40% most asked)
- *   6-week:  12 q/week, minFreq 0.4
- *   8-week:  10 q/week, minFreq 0.25
- *   12-week:  7 q/week, minFreq 0.1
- *   16+week:  5 q/week, minFreq 0.0 (everything)
  */
 function getRoadmapParams(weeks: number): { questionsPerWeek: number; minFrequency: number } {
   if (weeks <= 4)  return { questionsPerWeek: 15, minFrequency: 0.6 };
@@ -84,7 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw ApiError.badRequest('Invalid companySlug format');
     }
 
-    // Check if already in roadmap
+    // Check if already in roadmap (pre-check before hitting DB unique constraint)
     const existing = await roadmapRepository.findByStudentAndCompany(user.userId as any, safeSlug);
     if (existing) {
       return NextResponse.json(
@@ -94,14 +91,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     // Look up the real company to get its _id and display name
+    // NOTE: companyRepository.findBySlug uses MongoDB aggregation — returns a plain object,
+    // NOT a Mongoose Document. Must wrap _id manually for Mongoose schema.
     const company = await companyRepository.findBySlug(safeSlug);
     if (!company) {
       throw ApiError.notFound('Company not found');
     }
 
-    const userWeeks = Math.min(Math.max(Number(preparationWeeks) || 12, 4), 52);
+    // FIX: Aggregate returns plain object — wrap _id in new ObjectId for Mongoose
+    const companyId = new mongoose.Types.ObjectId((company._id as any).toString());
 
-    // BUG-R2 FIX: Get duration-specific params (was always Math.min(count, 20) regardless)
+    const userWeeks = Math.min(Math.max(Number(preparationWeeks) || 12, 4), 52);
     const { questionsPerWeek, minFrequency } = getRoadmapParams(userWeeks);
 
     // ── Build curriculum weeks from company's real topic frequency data ──
@@ -114,65 +114,91 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       .sort((a, b) => b.questionCount - a.questionCount)
       .slice(0, userWeeks);
 
-    const DEFAULT_TOPICS = ['Arrays', 'Strings', 'Dynamic Programming', 'Trees', 'Graphs', 'Greedy', 'Binary Search', 'Hash Tables', 'Sorting', 'Two Pointers'];
-    const weekTopics = topTopics.length >= 2 ? topTopics.map(t => t.topicName) : DEFAULT_TOPICS.slice(0, userWeeks);
+    const DEFAULT_TOPICS = [
+      'Arrays', 'Strings', 'Dynamic Programming', 'Trees', 'Graphs',
+      'Greedy', 'Binary Search', 'Hash Tables', 'Sorting', 'Two Pointers',
+    ];
+    const weekTopics = topTopics.length >= 2
+      ? topTopics.map(t => t.topicName)
+      : DEFAULT_TOPICS.slice(0, userWeeks);
 
     // Fill remaining weeks if company has fewer topics than weeks
     while (weekTopics.length < userWeeks) {
       weekTopics.push(DEFAULT_TOPICS[weekTopics.length % DEFAULT_TOPICS.length]);
     }
 
-    // BUG-R2 FIX: Build weeks with proper questionsPerWeek cap and actual question counts
-    // We now query the DB to count HOW MANY questions actually meet the frequency threshold
-    // so that totalQuestions reflects reality, not just topicFrequency.questionCount
+    // Build weeks — FIX: catch per-week question query failures gracefully
     const weeks = await Promise.all(weekTopics.map(async (t, i) => {
-      // Find original frequency item to get raw question count
       const freqItem = topicFrequency.find(tf => tf.topicName === t);
       const originalCount = freqItem ? freqItem.questionCount : 10;
 
-      // Count actual questions with frequency threshold applied
-      const { total: actualCount } = await questionRepository.findMany({
-        companySlug: safeSlug,
-        topic: t,
-        minFrequency,
-        limit: 1, // we only need the count
-      });
+      let actualCount = 0;
+      try {
+        const result = await questionRepository.findMany({
+          companySlug: safeSlug,
+          topic: t,
+          minFrequency,
+          limit: 1, // only need total count
+        });
+        actualCount = result.total;
+      } catch (_queryErr) {
+        // If per-week question query fails, fall back to topicFrequency data
+        actualCount = 0;
+      }
 
-      // Cap at questionsPerWeek from the duration formula
       const cappedCount = Math.min(Math.max(actualCount, 0), questionsPerWeek);
-      // If no questions found at this threshold, try with 0 frequency (fallback)
-      const finalCount = cappedCount > 0 ? cappedCount : Math.min(originalCount, questionsPerWeek);
+      const finalCount = cappedCount > 0
+        ? cappedCount
+        : Math.min(Math.max(originalCount, 1), questionsPerWeek);
 
       return {
         weekNumber: i + 1,
         topicLabel: t,
-        // BUG-R2 FIX: was Math.min(t.questionCount, 20) — now uses duration-aware limit
         totalQuestions: finalCount,
         doneQuestions: 0,
-        status: i === 0 ? 'active' : 'locked',
+        status: (i === 0 ? 'active' : 'locked') as 'active' | 'locked' | 'done',
+        questionIds: [] as mongoose.Types.ObjectId[],
       };
     }));
 
-    const actualWeeks = weeks.length;
-
-    const newRoadmap = await roadmapRepository.create({
-      studentId: user.userId as any,
-      companyId: company._id as any,
-      companySlug: safeSlug,
-      companyName: company.name,
-      roleName: targetRole || 'SDE-1',
-      weeksCommitted: actualWeeks,
-      currentWeek: 1,
-      pctComplete: 0,
-      isActive: true,
-      weeks,
-    } as any);
+    let newRoadmap;
+    try {
+      newRoadmap = await roadmapRepository.create({
+        studentId: new mongoose.Types.ObjectId(user.userId) as any,
+        companyId: companyId as any,
+        companySlug: safeSlug,
+        companyName: company.name,
+        companyLogoUrl: (company as any).logoUrl || undefined,
+        roleName: (typeof targetRole === 'string' && targetRole.trim()) ? targetRole.trim() : 'SDE-1',
+        weeksCommitted: weeks.length,
+        currentWeek: 1,
+        pctComplete: 0,
+        isActive: true,
+        weeks,
+      } as any);
+    } catch (dbError: any) {
+      // FIX: MongoDB duplicate key error (E11000) returns 500 by default — convert to 400
+      if (dbError?.code === 11000) {
+        return NextResponse.json(
+          { success: false, error: { message: 'Company already in your roadmap' } },
+          { status: 400 }
+        );
+      }
+      // Log real error in dev so we can see Mongoose validation details
+      if (process.env.NODE_ENV !== 'production') {
+        console.error('[POST /api/user/me/roadmap] DB save error:', dbError?.message, JSON.stringify(dbError?.errors));
+      }
+      throw dbError;
+    }
 
     return NextResponse.json(
-      successResponse(newRoadmap, { status: 201, message: `${company.name} roadmap created!` }),
+      successResponse(newRoadmap, { status: 201, message: `${company.name} roadmap created!` } as any),
       { status: 201 }
     );
   } catch (error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.error('[POST /api/user/me/roadmap] Unhandled error:', error);
+    }
     return handleApiError(error);
   }
 }

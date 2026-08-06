@@ -39,8 +39,6 @@ export interface IUserRoadmap extends Document {
   // BUG-PR2 FIX: track when student last practiced for this roadmap
   lastActive?: Date;
   isSeeded?: boolean;
-  addedAt: Date;
-  lastActive?: Date;
 }
 
 const RoadmapWeekSchema = new Schema<IRoadmapWeek>(
@@ -90,7 +88,6 @@ const UserRoadmapSchema = new Schema<IUserRoadmap>(
     lastActive: { type: Date, default: null },
     isSeeded: { type: Boolean, default: false },
     addedAt: { type: Date, default: Date.now },
-    lastActive: { type: Date },
   },
   {
     collection: 'user_roadmaps',
