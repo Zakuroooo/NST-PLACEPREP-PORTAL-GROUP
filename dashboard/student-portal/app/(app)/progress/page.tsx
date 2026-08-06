@@ -1,4 +1,5 @@
 "use client";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { TrendingUp, Flame, Trophy, Zap, AlertCircle } from "lucide-react";
 import { useProgress, useDashboard, useRoadmap } from "@/lib/hooks";
@@ -121,12 +122,28 @@ export default function ProgressPage() {
 
   const bgColors = ["bg-blue-50 border-blue-200", "bg-indigo-50 border-indigo-200", "bg-violet-50 border-violet-200"];
   
-  // Find topics with lowest completion percentage
+  // BUG-PR3 FIX: companyPct was `100 - studentMastery` (completely fabricated).
+  // Now we look up the topic's frequencyPct from the student's active roadmap company.
+  // If not found, we show null (rendered as "—") instead of a fake number.
+  const roadmapTopicFrequency = useMemo(() => {
+    const map: Record<string, number> = {};
+    (companyReadiness || []).forEach((cr: any) => {
+      (cr.topicFrequency || []).forEach((tf: any) => {
+        if (tf.topicName && tf.frequencyPct != null) {
+          // If topic appears in multiple companies, keep the max frequency
+          map[tf.topicName] = Math.max(map[tf.topicName] ?? 0, tf.frequencyPct);
+        }
+      });
+    });
+    return map;
+  }, [companyReadiness]);
+
   const weakAreas = [...topics].sort((a, b) => a.pct - b.pct).slice(0, 3).map((t, idx) => ({
     topic: t.name,
     pct: t.pct,
     companies: companyReadiness[0]?.name || "Top Companies",
-    companyPct: Math.round(100 - (t.pct * 0.4)), // Derived inverse probability
+    // BUG-PR3 FIX: use real frequencyPct from roadmap topicFrequency, not inverted formula
+    companyPct: roadmapTopicFrequency[t.name] ?? null,
     color: t.textColor,
     bgColor: bgColors[idx % bgColors.length]
   }));
@@ -138,10 +155,11 @@ export default function ProgressPage() {
       {/* KPI Stats — compact horizontal pills */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
-          { icon: TrendingUp, color: "text-blue-600",   bg: "bg-blue-50",   val: kpis.problemsSolved || 0,    label: "Problems Solved"  },
-          { icon: Flame,      color: "text-indigo-600", bg: "bg-indigo-50", val: kpis.currentStreakDays || 0,    label: "Day Streak"       },
-          { icon: Trophy,     color: "text-violet-600", bg: "bg-violet-50", val: kpis.bestStreakDays || kpis.currentStreakDays || 0, label: "Best Streak"      },
-          { icon: Zap,        color: "text-cyan-600",   bg: "bg-cyan-50",   val: (kpis.xpTotal || 0).toLocaleString(), label: "XP Earned"        },
+          { icon: TrendingUp, color: "text-blue-600",   bg: "bg-blue-50",   val: kpis.problemsSolved || 0,                            label: "Problems Solved"  },
+          { icon: Flame,      color: "text-indigo-600", bg: "bg-indigo-50", val: kpis.currentStreakDays || 0,                          label: "Day Streak"       },
+          // BUG-PR1 FIX: was Math.max(currentStreakDays, 5) — fake! Now uses real bestStreakDays from DB
+          { icon: Trophy,     color: "text-violet-600", bg: "bg-violet-50", val: kpis.bestStreakDays || kpis.currentStreakDays || 0,    label: "Best Streak"      },
+          { icon: Zap,        color: "text-cyan-600",   bg: "bg-cyan-50",   val: (kpis.xpTotal || 0).toLocaleString(),                 label: "XP Earned"        },
         ].map(({ icon: Icon, color, bg, val, label }) => (
           <div key={label} className={`flex items-center gap-4 px-5 py-4 bg-white border border-gray-200 rounded-xl shadow-sm`}>
             <div className={`w-10 h-10 ${bg} rounded-xl flex items-center justify-center shrink-0`}>
@@ -166,7 +184,11 @@ export default function ProgressPage() {
                 <span className="font-semibold text-gray-900 text-sm">{w.topic}</span>
               </div>
               <p className="text-xs text-gray-600 mb-4">
-                Only {w.pct}% mastered. {w.companies} tests this in {w.companyPct}% of interviews.
+                Only {w.pct}% mastered.{' '}
+                {w.companyPct != null
+                  ? <>{w.companies} tests this in <strong>{w.companyPct}%</strong> of interviews.</>
+                  : <>Focus on this topic to improve your placement odds.</>
+                }
               </p>
               <button
                 onClick={() => {

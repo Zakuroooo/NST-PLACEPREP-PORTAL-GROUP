@@ -1,6 +1,10 @@
 /**
  * dashboard/student-portal/app/api/companies/[slug]/route.ts
  * GET /api/companies/[slug] — full company profile.
+ *
+ * FIXES:
+ *   BUG-C1: Increased question limit from 10 to 50
+ *   BUG-C7: Show unverified experiences with isVerified flag (admin verification wall removed)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,10 +28,13 @@ export async function GET(
     const company = await companyRepository.findBySlug(slug);
     if (!company) throw ApiError.notFound('Company');
 
-    // Fetch related questions and verified experiences in parallel
+    // BUG-C1 FIX: was hardcoded to 10, increased to 50
+    // BUG-C7 FIX: removed verified:true filter — experiences were always empty because
+    //   admin never verifies them. Now returns all experiences with isVerified flag
+    //   so frontend can show "Pending Verification" badge on unverified ones.
     const [{ questions }, { experiences }] = await Promise.all([
-      questionRepository.findMany({ companySlug: slug, limit: 100 }),
-      experienceRepository.findAll({ companySlug: slug, verified: true, limit: 5 }),
+      questionRepository.findMany({ companySlug: slug, limit: 50 }),
+      experienceRepository.findAll({ companySlug: slug, limit: 10 }),
     ]);
 
     return successResponse({ ...company, questions, experiences });

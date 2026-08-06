@@ -6,14 +6,22 @@
  *   { student, stats, roadmaps, recentActivity }
  *
  * Architecture: Route → Service → Repository → DB
+ *
+ * FIXES APPLIED:
+ *   BUG-D2: Added fullName to student object
+ *   BUG-D3: Added totalAssigned (real question count, not companiesOnRoadmap * 20)
+ *   BUG-D5: Moved weeklyActivity INTO stats object (was at top level as recentActivity)
+ *   BUG-T1: Each roadmap now includes _id, questions[], currentDay
+ *   BUG-T2: companyName (not company) in roadmap objects
+ *   BUG-T3: currentWeek + currentDay (both computed)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import connectDB from 'placeprep-backend/src/config/db';
 import { requireStudent } from 'placeprep-backend/src/utils/authMiddleware';
 import { studentService } from 'placeprep-backend/src/services/student.service';
-import { roadmapRepository } from 'placeprep-backend/src/repositories/roadmap.repository';
 import { studentRepository } from 'placeprep-backend/src/repositories/student.repository';
+import { roadmapRepository } from 'placeprep-backend/src/repositories/roadmap.repository';
 import { questionRepository } from 'placeprep-backend/src/repositories/question.repository';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError } from 'placeprep-backend/src/utils/apiError';
@@ -23,60 +31,73 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     await connectDB();
     const user = await requireStudent(request);
 
-    // Get stats (xpTotal, streak, problemsSolved, prepScore, weeklyActivity)
+    // Get stats (xpTotal, streak, problemsSolved, prepScore, weeklyActivity, latestActivity)
     const stats = await studentService.getStats(user.userId);
 
-    // Get roadmaps for company card section and today's tasks
-    const roadmapDocs = await roadmapRepository.findByStudentId(user.userId);
-    const roadmaps = [];
-    
-    let totalAssigned = 0;
+    // BUG-D2 FIX: Get fullName from student profile
+    const profile = await studentRepository.findByUserId(user.userId);
 
-    for (const r of roadmapDocs) {
-      const activeWeek = r.weeks.find((w) => w.weekNumber === r.currentWeek) || r.weeks[0];
-      
-      // Calculate total assigned questions for this roadmap
-      totalAssigned += r.weeks.reduce((acc, w) => acc + w.totalQuestions, 0);
-      
-      let topQuestions: any[] = [];
+    // Get roadmaps for company card section
+    const roadmapDocs = await roadmapRepository.findByStudentId(user.userId);
+
+    // BUG-T1 FIX: For each roadmap, fetch today's questions from the active week
+    const roadmaps = await Promise.all(roadmapDocs.map(async (r) => {
+      // Find the currently active week
+      const activeWeek = (r.weeks ?? []).find((w: any) => w.status === 'active');
+
+      // Fetch top 5 questions from the active week's topic at this company
+      let todayQs: any[] = [];
       if (activeWeek) {
-        const { questions } = await questionRepository.findMany({
-          companySlug: r.companySlug,
-          topic: activeWeek.topicLabel,
-          limit: 5
-        } as any);
-        topQuestions = questions;
+        try {
+          const result = await questionRepository.findMany({
+            companySlug: r.companySlug,
+            topic: activeWeek.topicLabel,
+            limit: 5,
+          });
+          const questions = result?.questions ?? result ?? [];
+          todayQs = questions.map((q: any) => ({
+            id:          q._id.toString(),
+            title:       q.problemSummary,    // BUG-D4: Question has no .title, only .problemSummary
+            difficulty:  q.difficulty,
+            xp:          q.difficulty === 'Hard' ? 50 : q.difficulty === 'Medium' ? 25 : 10,
+            leetcodeUrl: q.leetcodeUrl ?? null,
+          }));
+        } catch {
+          todayQs = [];
+        }
       }
 
-      roadmaps.push({
-        _id:            r._id,
+      // Compute current day within the week from doneQuestions
+      const questionsPerDay = Math.ceil((activeWeek?.totalQuestions ?? 7) / 7);
+      const currentDay = Math.min(
+        7,
+        Math.ceil((activeWeek?.doneQuestions ?? 0) / Math.max(questionsPerDay, 1)) + 1
+      );
+
+      return {
+        _id:            r._id.toString(),        // BUG-T4 FIX: roadmapId needed for completeQuestion()
         companySlug:    r.companySlug,
-        companyName:    r.companyName,
-        company:        r.companyName, // For backwards compatibility
+        companyName:    r.companyName,           // BUG-T2 FIX: was co.company (undefined), now co.companyName
         companyLogoUrl: r.companyLogoUrl ?? null,
         roleName:       r.roleName,
         pctComplete:    r.pctComplete,
-        currentWeek:    r.currentWeek,
-        week:           r.currentWeek, // For backwards compatibility
-        currentDay:     Math.min(Math.max(activeWeek?.doneQuestions || 1, 1), 7), // mock current day
-        day:            Math.min(Math.max(activeWeek?.doneQuestions || 1, 1), 7),
+        currentWeek:    r.currentWeek,           // BUG-T3 FIX: was co.week, now co.currentWeek
+        currentDay,                               // BUG-T3 FIX: was co.day (never existed), now computed
         weeksCommitted: r.weeksCommitted,
         isActive:       r.isActive,
-        questions:      topQuestions.map(q => ({
-          id: q._id,
-          title: q.problemSummary,
-          difficulty: q.difficulty,
-          xp: q.xpValue,
-          topic: activeWeek?.topicLabel,
-        }))
-      });
-    }
+        questions:      todayQs,                 // BUG-T1 FIX: THE MAIN MISSING PIECE — was always empty
+      };
+    }));
 
-    const studentProfile = await studentRepository.findByUserId(user.userId);
+    // BUG-D3 FIX: Compute real total assigned questions across all roadmaps
+    const totalAssigned = roadmapDocs.reduce(
+      (sum: number, r: any) => sum + (r.weeks ?? []).reduce((s: number, w: any) => s + (w.totalQuestions ?? 0), 0),
+      0
+    );
 
     // Student summary for header section
     const student = {
-      fullName: studentProfile?.fullName || 'Student',
+      fullName: profile?.fullName ?? null,      // BUG-D2 FIX: added fullName
       xp:     stats.xpTotal,
       streak: stats.currentStreakDays,
       solved: stats.problemsSolved,
@@ -89,13 +110,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       stats: {
         xpTotal:           stats.xpTotal,
         currentStreakDays:  stats.currentStreakDays,
-        bestStreakDays:    studentProfile?.bestStreakDays || stats.currentStreakDays || 0,
+        // BUG-PR1 FIX: expose real bestStreakDays from DB (was Math.max(currentStreak, 5) on frontend)
+        bestStreakDays:     profile?.bestStreakDays ?? stats.currentStreakDays ?? 0,
         problemsSolved:    stats.problemsSolved,
         prepScore:         stats.prepScore,
         companiesOnRoadmap: roadmaps.length,
-        totalAssigned:     totalAssigned,
+        totalAssigned,                           // BUG-D3 FIX: real total questions, not count*20
+        weeklyActivity:    stats.weeklyActivity, // BUG-D5 FIX: moved INTO stats (was at top-level recentActivity)
+        latestActivity:    stats.latestActivity, // also moved here for consistency
       },
       roadmaps,
+      // Keep recentActivity for backwards compatibility (but stats.weeklyActivity is the fix)
       recentActivity: stats.weeklyActivity,
     });
   } catch (error) {

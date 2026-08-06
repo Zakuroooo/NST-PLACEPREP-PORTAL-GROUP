@@ -225,22 +225,31 @@ export function useCompany(slug: string | null) {
 }
 
 // ── Practice ───────────────────────────────────────────────────────────────
-export function usePractice(params?: {
+export function usePractice(filters: {
   topic?: string;
   difficulty?: string;
   company?: string;
+  roundType?: string;
   page?: number;
+  limit?: number;
 }) {
-  const sp = new URLSearchParams();
-  if (params?.topic) sp.set('topic', params.topic);
-  if (params?.difficulty) sp.set('difficulty', params.difficulty);
-  if (params?.company) sp.set('company', params.company);
-  if (params?.page) sp.set('page', String(params.page));
-  const key = `/api/practice${sp.toString() ? `?${sp}` : ''}`;
-  return useSWR(key, fetcher, {
-    revalidateOnFocus: false,
-    dedupingInterval: 30_000,
-  });
+  const qs = new URLSearchParams();
+  if (filters.topic) qs.append("topic", filters.topic);
+  if (filters.difficulty) qs.append("difficulty", filters.difficulty);
+  if (filters.company) qs.append("company", filters.company);
+  if (filters.roundType) qs.append("roundType", filters.roundType);
+  if (filters.page) qs.append("page", String(filters.page));
+  if (filters.limit) qs.append("limit", String(filters.limit));
+
+  return useSWR(`/api/practice?${qs.toString()}`, fetcher);
+}
+
+export function useTopics() {
+  return useSWR('/api/topics', fetcher);
+}
+
+export function usePracticeStats() {
+  return useSWR('/api/practice/stats', fetcher);
 }
 
 export async function completeQuestion(questionId: string, roadmapId?: string) {

@@ -11,6 +11,7 @@ import { requireStudent } from 'placeprep-backend/src/utils/authMiddleware';
 import { questionRepository } from 'placeprep-backend/src/repositories/question.repository';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError } from 'placeprep-backend/src/utils/apiError';
+import { rateLimit } from '@/lib/rateLimit';
 
 /** Normalize raw DB question → shape the frontend expects */
 function normalizeQuestion(q: any) {
@@ -41,7 +42,16 @@ function normalizeQuestion(q: any) {
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await connectDB();
-    await requireStudent(request);
+    const user = await requireStudent(request);
+
+    // BUG-S1 FIX: Rate limit — 30 requests per 60s per user
+    const rl = rateLimit(user.userId, 'practice', 30, 60_000);
+    if (!rl.ok) {
+      return NextResponse.json(
+        { error: `Rate limit exceeded. Retry in ${rl.retryAfter}s.` },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfter) } }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const rawTopic    = searchParams.get('topic')      || undefined;

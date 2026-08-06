@@ -11,9 +11,8 @@ export const questionRepository = {
     companyId?: string;
     topic?: string;
     difficulty?: string;
-    roundType?: string | string[];
-    role?: string;
-    minFrequency?: number;
+    roundType?: string;
+    minFrequency?: number;  // BUG-R4 FIX: frequency threshold filter
     page?: number;
     limit?: number;
   }): Promise<{ questions: IQuestion[]; total: number }> {
@@ -21,17 +20,16 @@ export const questionRepository = {
     if (filter.companySlug) query.companySlug = filter.companySlug;
     if (filter.companyId) query.companyId = new mongoose.Types.ObjectId(filter.companyId);
     if (filter.difficulty) query.difficulty = filter.difficulty;
-    
     if (filter.roundType) {
-      if (Array.isArray(filter.roundType)) {
-        query.roundType = { $in: filter.roundType };
+      if (filter.roundType.includes(',')) {
+        query.roundType = { $in: filter.roundType.split(',').map(r => r.trim()) };
       } else {
         query.roundType = filter.roundType;
       }
     }
-    
     if (filter.topic) query.topics = filter.topic;
-    if (filter.role) query.targetRoles = filter.role;
+    // BUG-R4 FIX: filter by minimum frequency score so low-frequency questions
+    // are excluded from roadmap weeks (e.g. minFrequency: 0.4 for 6-week plans)
     if (filter.minFrequency !== undefined) {
       query.frequencyScore = { $gte: filter.minFrequency };
     }
