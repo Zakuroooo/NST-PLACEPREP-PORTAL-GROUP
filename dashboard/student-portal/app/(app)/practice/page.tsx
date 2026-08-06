@@ -66,9 +66,7 @@ function PracticeContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
-  const fetcher = (url: string) => fetch(url, { credentials: 'include' }).then((r) => r.json());
-  const { data: topicsData } = useSWR('/api/topics', fetcher);
-  const allTopics = topicsData?.data?.topics ?? topicsData?.topics ?? [];
+
 
   // Which category is active (from URL or selection)
   const [activeCategory, setActiveCategory] = useState<string | null>(
