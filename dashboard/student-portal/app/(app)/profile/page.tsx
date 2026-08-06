@@ -124,7 +124,19 @@ function OverviewTab({ user, onEdit }: { user: any; onEdit: () => void }) {
  const handleSave = async () => {
   setEditing(false);
   try {
-   await updateProfile({ bio, linkedinUrl: linkedin, githubUrl: github });
+   // Normalize URLs: validator requires https:// prefix
+   const normalizeUrl = (val: string, domain: string) => {
+    if (!val || val.trim() === '') return '';
+    const v = val.trim();
+    if (v.startsWith('https://')) return v;
+    if (v.startsWith('http://')) return v.replace('http://', 'https://');
+    return `https://${v}`;
+   };
+   await updateProfile({
+    bio,
+    linkedinUrl: normalizeUrl(linkedin, 'linkedin'),
+    githubUrl: normalizeUrl(github, 'github'),
+   });
    setSaved(true);
    setTimeout(() => setSaved(false), 2000);
   } catch (err) {

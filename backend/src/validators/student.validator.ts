@@ -9,13 +9,11 @@ export const updateProfileSchema = z.object({
   linkedinUrl: z
     .string()
     .url('Invalid LinkedIn URL')
-    .startsWith('https://linkedin.com', 'Must be a LinkedIn URL')
     .optional()
     .or(z.literal('')),
   githubUrl: z
     .string()
     .url('Invalid GitHub URL')
-    .startsWith('https://github.com', 'Must be a GitHub URL')
     .optional()
     .or(z.literal('')),
   year: z.enum(['1st', '2nd', '3rd', '4th']).optional(),
