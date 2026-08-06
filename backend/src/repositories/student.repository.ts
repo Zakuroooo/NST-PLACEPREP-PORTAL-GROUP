@@ -91,11 +91,15 @@ export const studentRepository = {
     );
   },
 
-  /** Update streak */
+  /** Update streak + track historical best streak (BUG-PR1 FIX) */
   async updateStreak(userId: string, streakDays: number): Promise<void> {
     await StudentProfile.findOneAndUpdate(
       { userId: new mongoose.Types.ObjectId(userId) },
-      { currentStreakDays: streakDays, lastActiveAt: new Date() }
+      {
+        $set: { currentStreakDays: streakDays, lastActiveAt: new Date() },
+        // BUG-PR1 FIX: $max only updates bestStreakDays if streakDays > current best
+        $max: { bestStreakDays: streakDays },
+      }
     );
   },
 

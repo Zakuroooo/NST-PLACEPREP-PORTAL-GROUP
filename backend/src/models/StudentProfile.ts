@@ -24,6 +24,7 @@ export interface IStudentProfile extends Document {
   githubUrl?: string;
   xpTotal: number;
   currentStreakDays: number;
+  // BUG-PR1 FIX: Track historical best streak (was Math.max(currentStreak, 5) — fake!)
   bestStreakDays: number;
   lastActiveAt?: Date;
   // Onboarding selections
@@ -83,6 +84,7 @@ const StudentProfileSchema = new Schema<IStudentProfile>(
     githubUrl: { type: String },
     xpTotal: { type: Number, default: 0, min: 0 },
     currentStreakDays: { type: Number, default: 0, min: 0 },
+    // BUG-PR1 FIX: Track historical best streak so Progress page shows real value
     bestStreakDays: { type: Number, default: 0, min: 0 },
     lastActiveAt: { type: Date },
     // Onboarding

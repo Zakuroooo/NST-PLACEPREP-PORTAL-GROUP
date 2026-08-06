@@ -30,15 +30,14 @@ export default function CompaniesPage() {
   const { data: companiesData, isLoading } = useCompanies();
   const { data: roadmapData } = useRoadmap();
 
-  // companiesData is already the array of companies because useCompanies unwraps it
-  const allCompanies: Company[] = Array.isArray(companiesData) 
-    ? companiesData 
-    : (companiesData?.data?.companies ?? companiesData?.companies ?? []);
+  // BUG-W3 FIX: fetcher unwraps .data, so companiesData is already the array
+  const allCompanies: Company[] = Array.isArray(companiesData) ? companiesData : [];
 
-  const roadmapDataUnwrapped = Array.isArray(roadmapData) ? roadmapData : (roadmapData?.data?.roadmaps ?? roadmapData?.roadmaps ?? []);
-  const roadmapSlugs: string[] = roadmapDataUnwrapped.map(
+  // BUG-W3 FIX: same for roadmapData — already a raw array from fetcher
+  const roadmapSlugs: string[] = (Array.isArray(roadmapData) ? roadmapData : []).map(
     (r: any) => r.companySlug
   );
+
 
   // Category mapping from API → filter
   const categoryMatch = (co: Company): string[] => {

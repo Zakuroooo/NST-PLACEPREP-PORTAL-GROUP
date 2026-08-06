@@ -71,13 +71,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       source: 'nst_internal',
     });
 
-    if (profile) {
-      await studentRepository.updateByUserId(user.userId, { xpTotal: (profile.xpTotal || 0) + 50 });
+    // BUG-EX1 FIX: Award 50 XP for submitting an experience
+    // Previously the success modal showed '+50 XP Earned!' but this was never actually called
+    try {
+      await studentRepository.addXp(user.userId, 50);
+    } catch {
+      // Don't fail the request if XP award fails — experience was already created
     }
 
-    return successResponse({ experience, xpEarned: 50 }, {
+    return successResponse(experience, {
       status: 201,
-      message: 'Experience submitted! It will appear after admin verification.',
+      message: 'Experience submitted! +50 XP awarded. It will appear after admin verification.',
     });
   } catch (error) {
     return handleApiError(error);
