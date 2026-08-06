@@ -126,10 +126,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // We now query the DB to count HOW MANY questions actually meet the frequency threshold
     // so that totalQuestions reflects reality, not just topicFrequency.questionCount
     const weeks = await Promise.all(weekTopics.map(async (t, i) => {
+      // Find original frequency item to get raw question count
+      const freqItem = topicFrequency.find(tf => tf.topicName === t);
+      const originalCount = freqItem ? freqItem.questionCount : 10;
+
       // Count actual questions with frequency threshold applied
       const { total: actualCount } = await questionRepository.findMany({
         companySlug: safeSlug,
-        topic: t.topicName,
+        topic: t,
         minFrequency,
         limit: 1, // we only need the count
       });
@@ -137,11 +141,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       // Cap at questionsPerWeek from the duration formula
       const cappedCount = Math.min(Math.max(actualCount, 0), questionsPerWeek);
       // If no questions found at this threshold, try with 0 frequency (fallback)
-      const finalCount = cappedCount > 0 ? cappedCount : Math.min(t.questionCount, questionsPerWeek);
+      const finalCount = cappedCount > 0 ? cappedCount : Math.min(originalCount, questionsPerWeek);
 
       return {
         weekNumber: i + 1,
-        topicLabel: t.topicName,
+        topicLabel: t,
         // BUG-R2 FIX: was Math.min(t.questionCount, 20) — now uses duration-aware limit
         totalQuestions: finalCount,
         doneQuestions: 0,

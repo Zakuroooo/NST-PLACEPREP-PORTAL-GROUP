@@ -16,6 +16,7 @@ import connectDB from 'placeprep-backend/src/config/db';
 import { requireStudent } from 'placeprep-backend/src/utils/authMiddleware';
 // QuestionCompletion uses `export default` (not named export) — import accordingly
 import QuestionCompletion from 'placeprep-backend/src/models/QuestionCompletion';
+import 'placeprep-backend/src/models/Question'; // Ensure Question model is registered
 import mongoose from 'mongoose';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError } from 'placeprep-backend/src/utils/apiError';
@@ -29,10 +30,12 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       studentId: new mongoose.Types.ObjectId(user.userId),
     }).select('questionId completedAt').lean();
 
-    const completedQuestions = completions.map((c: any) => ({
-      questionId: c.questionId.toString(),
-      completedAt: c.completedAt,
-    }));
+    const completedQuestions = completions
+      .filter((c: any) => c && c.questionId)
+      .map((c: any) => ({
+        questionId: c.questionId.toString(),
+        completedAt: c.completedAt,
+      }));
 
     return successResponse({ completedQuestions });
   } catch (error) {
