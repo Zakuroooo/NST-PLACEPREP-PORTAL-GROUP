@@ -37,7 +37,7 @@ export default function StudentLoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.message || "Login failed. Please check your credentials.");
+        setError(data.error?.message || data.message || "Login failed. Please check your credentials.");
         return;
       }
 

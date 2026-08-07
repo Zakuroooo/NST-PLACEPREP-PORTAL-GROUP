@@ -50,6 +50,20 @@ export default function DashboardPage() {
   const { data: apiData, isLoading, error } = useDashboard();
   // BUG-D1 FIX: Use credFetcher with credentials so JWT cookie is sent
   const { data: expData } = useSWR('/api/experiences?limit=3', credFetcher);
+  // B07 FIX: Load already-completed questions so checkboxes persist across refresh
+  const { data: completedData, mutate: mutateCompleted } = useSWR('/api/user/me/completed-questions', credFetcher);
+
+  // B07 FIX: When completedData loads, pre-populate checked state from DB
+  useEffect(() => {
+    const completedIds: string[] = completedData?.completedQuestions?.map((q: any) => q.questionId) ?? [];
+    if (completedIds.length > 0) {
+      setChecked((prev) => {
+        const next = { ...prev };
+        completedIds.forEach((id) => { next[id] = true; });
+        return next;
+      });
+    }
+  }, [completedData]);
 
   // Only fire the error toast once when the error first appears, not on every re-render
   useEffect(() => {
@@ -78,8 +92,9 @@ export default function DashboardPage() {
   const prepScore = apiData?.stats?.prepScore ?? calcPrepScore(solved, assigned, streak, xp, targetXp, targetStreak);
   // BUG-D2 FIX: fullName is now in student object from API
   const studentName = apiData?.student?.fullName ?? "Student";
-  // BUG-D1 FIX: credFetcher already unwraps .data, so expData.experiences is correct
-  const recentExperiences = expData?.experiences ?? [];
+  // FIX: SWR credFetcher unwraps json.data so expData IS the array directly.
+  // Slice to 3 max (API is called with ?limit=3 but safety check here too)
+  const recentExperiences = (Array.isArray(expData) ? expData : (expData?.experiences ?? expData?.data ?? [])).slice(0, 3);
   // BUG-D5 FIX: latestActivity is now in stats object (API was returning it at top-level)
   const latestActivity = apiData?.stats?.latestActivity;
 
@@ -157,10 +172,10 @@ export default function DashboardPage() {
               You haven&apos;t added any company roadmaps yet. Go to <Link href="/companies" className="text-blue-600 font-medium hover:underline">Companies</Link> to add one.
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-4">
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
               {targetCompanies.map((co: any) => {
                 return (
-                  <div key={co.name} className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-sm transition-shadow flex flex-col">
+                  <div key={co.name} className="bg-white border border-gray-200 rounded-xl p-4 hover:shadow-sm transition-shadow flex flex-col flex-shrink-0" style={{ minWidth: '220px', maxWidth: '240px' }}>
                     <div className="flex items-center justify-between mb-3 flex-1">
                       <div className="flex items-center gap-3">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -265,16 +280,35 @@ export default function DashboardPage() {
                       key={q.id}
                       className="flex items-center gap-3 px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
                       onClick={async () => {
-                        // BUG-T4 FIX: was only local state — now calls API to persist completion and award XP
                         const wasChecked = !!checked[q.id];
-                        setChecked((c) => ({ ...c, [q.id]: !wasChecked })); // optimistic update
-                        if (!wasChecked) {
-                          try {
-                            await completeQuestion(q.id, co._id); // co._id = roadmapId (BUG-T1 FIX)
-                            toast.success(`+${q.xp} XP earned!`);
-                          } catch (err: any) {
-                            setChecked((c) => ({ ...c, [q.id]: false })); // rollback on error
-                            toast.error(err.message ?? "Failed to mark complete");
+                        setChecked((c) => ({ ...c, [q.id]: true })); // always optimistically check
+                        try {
+                          if (!wasChecked) {
+                            // Mark complete: save to DB, earn XP
+                            const result: any = await completeQuestion(q.id, co._id);
+                            await mutateCompleted(); // refresh completed list
+                            if (!result?.alreadyCompleted) {
+                              toast.success(`+${q.xp} XP earned!`, { duration: 2000 });
+                            }
+                            // completeQuestion already calls globalMutate('/api/dashboard')
+                            // which will refresh the task list and remove this question
+                          } else {
+                            // Uncheck = call DELETE to remove completion & deduct XP
+                            const res = await fetch(`/api/questions/${q.id}/complete`, {
+                              method: 'DELETE',
+                              credentials: 'include',
+                              headers: { 'Content-Type': 'application/json' },
+                            });
+                            if (!res.ok) throw new Error('Failed to unmark');
+                            setChecked((c) => ({ ...c, [q.id]: false }));
+                            await mutateCompleted();
+                            toast(`-${q.xp} XP removed`, { duration: 2000 });
+                          }
+                        } catch (err: any) {
+                          // Only rollback on genuine errors (not idempotent already-completed)
+                          if (!err.message?.includes('already')) {
+                            setChecked((c) => ({ ...c, [q.id]: wasChecked }));
+                            toast.error(err.message ?? 'Failed to update question');
                           }
                         }
                       }}

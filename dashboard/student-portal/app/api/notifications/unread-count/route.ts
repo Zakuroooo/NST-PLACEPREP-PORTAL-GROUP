@@ -1,20 +1,16 @@
 import { NextResponse } from 'next/server';
-import { connectDB } from 'placeprep-backend/src/config/db';
+import connectDB from 'placeprep-backend/src/config/db';
 import { requireAuth } from 'placeprep-backend/src/utils/authMiddleware';
 import Notification from 'placeprep-backend/src/models/Notification';
 
 export async function GET(req: Request) {
   try {
-    const auth = await requireAuth(req as any);
-    if (!auth) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     await connectDB();
+    const auth = await requireAuth(req as any);
 
     const count = await Notification.countDocuments({
       userId: auth.userId,
-      isRead: false
+      isRead: false,
     });
 
     return NextResponse.json({

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Suspense } from "react";
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr";
 import { useRoadmap, useCompanies } from "@/lib/hooks";
 import { type UserRoadmapCompany } from "@/lib/constants";
 
@@ -183,6 +183,7 @@ function RoadmapContent() {
     totalWeeks: r.weeksCommitted ?? 12,
     currentWeek: r.currentWeek ?? 1,
     pctComplete: r.pctComplete ?? 0,
+    roadmapId: r._id?.toString() ?? r.roadmapId ?? undefined,  // FIX: preserve DB _id for completeQuestion
     weeks: (r.weeks || r.tasks || []).map((w: any) => ({
       weekNum: w.weekNumber || w.weekNum,
       topic: w.topicLabel || w.topic,
@@ -344,22 +345,24 @@ function WeekQuestions({
   topic,
   totalQuestions,
   weeksCommitted,
+  roadmapId,
 }: {
   companySlug: string;
   topic: string;
   totalQuestions: number;
   weeksCommitted: number;
+  roadmapId?: string;
 }) {
-  // BUG-R1 FIX: Use /api/roadmap/week-questions instead of /api/practice
-  // /api/practice returns ALL 500+ questions — no frequency cap, no week limit
-  // /api/roadmap/week-questions returns only the top N frequency-sorted questions
   const minFrequency = weeksCommitted <= 4 ? 0.6 : weeksCommitted <= 6 ? 0.4 : weeksCommitted <= 8 ? 0.25 : weeksCommitted <= 12 ? 0.1 : 0;
   const limit = totalQuestions || 10;
   const key = `/api/roadmap/week-questions?company=${companySlug}&topic=${encodeURIComponent(topic)}&limit=${limit}&minFrequency=${minFrequency}`;
   const { data: weekData, isLoading } = useSWR(key, fetcher);
 
-  // BUG-R9 FIX: Use dedicated completed-questions endpoint for green checkmarks
-  const { data: completedData } = useSWR('/api/user/me/completed-questions', fetcher);
+  // Completed-questions: drives green checkmarks and persists across refresh
+  const { data: completedData, mutate: mutateCompleted } = useSWR('/api/user/me/completed-questions', fetcher);
+
+  // Optimistic local toggle state for immediate UI feedback
+  const [localDone, setLocalDone] = useState<Record<string, boolean>>({});
 
   // weekData from /api/roadmap/week-questions returns { questions: [], total: N }
   const questions = weekData?.questions ?? [];
@@ -389,13 +392,60 @@ function WeekQuestions({
     <div className="space-y-3">
       {questions.map((q: any) => {
         const qId = (q._id || q.id)?.toString();
-        const isDone = completedIds.has(qId);
+        // BUG-B12 FIX: Prefer localDone for optimistic UI, fall back to server state
+        const isDone = localDone[qId] ?? completedIds.has(qId);
         // BUG-R1 FIX: Question model fields — .problemSummary not .title, .difficulty not .diff, .xpValue not .xp
         const title = q.problemSummary || q.title || 'Untitled Question';
         const difficulty = q.difficulty || q.diff || 'Medium';
         const xp = q.xpValue || (difficulty === 'Hard' ? 50 : difficulty === 'Medium' ? 25 : 10);
         return (
-          <div key={qId} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-colors cursor-pointer group gap-2 sm:gap-4">
+          <div
+            key={qId}
+            className="flex flex-col sm:flex-row sm:items-center justify-between p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:border-blue-300 transition-colors cursor-pointer group gap-2 sm:gap-4"
+            onClick={async () => {
+              const wasDone = localDone[qId] ?? completedIds.has(qId);
+              setLocalDone((p) => ({ ...p, [qId]: !wasDone })); // optimistic toggle
+              try {
+                if (!wasDone) {
+                  const res = await fetch(`/api/questions/${qId}/complete`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ roadmapId: roadmapId ?? null }),
+                  });
+                  if (!res.ok) throw new Error('Failed to mark complete');
+                  const resJson = await res.json().catch(() => ({}));
+                  // Show XP toast only if this is a fresh completion (not already done)
+                  if (!resJson?.data?.alreadyCompleted) {
+                    toast.success(`+${xp} XP earned!`, { duration: 2000 });
+                  }
+                  // Revalidate so green checkmarks persist on next visit
+                  await mutateCompleted();
+                  // Also revalidate dashboard XP + roadmap progress
+                  await Promise.all([
+                    globalMutate('/api/dashboard'),
+                    globalMutate('/api/progress'),
+                    globalMutate('/api/user/me/roadmap'),
+                  ]);
+                } else {
+                  const res = await fetch(`/api/questions/${qId}/complete`, {
+                    method: 'DELETE',
+                    credentials: 'include',
+                  });
+                  if (!res.ok) throw new Error('Failed to unmark');
+                  toast(`-${xp} XP removed`, { duration: 2000 });
+                  await mutateCompleted();
+                  await Promise.all([
+                    globalMutate('/api/dashboard'),
+                    globalMutate('/api/progress'),
+                    globalMutate('/api/user/me/roadmap'),
+                  ]);
+                }
+              } catch {
+                setLocalDone((p) => ({ ...p, [qId]: wasDone })); // rollback on error
+              }
+            }}
+          >
             <div className="flex items-start sm:items-center gap-3 min-w-0">
               <div className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 mt-0.5 sm:mt-0 ${isDone ? 'bg-green-500 border-green-500' : 'border-gray-300 bg-white'}`}>
                 {isDone && <CheckCircle className="w-3.5 h-3.5 text-white" />}
@@ -573,6 +623,7 @@ function RoadmapCurriculumView({ company }: { company: UserRoadmapCompany }) {
                     topic={week.topic}
                     totalQuestions={week.totalQuestions}
                     weeksCommitted={company.totalWeeks}
+                    roadmapId={company.roadmapId}
                   />
                 </div>
               )}

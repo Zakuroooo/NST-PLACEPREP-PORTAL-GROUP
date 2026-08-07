@@ -114,7 +114,11 @@ function PracticeContent() {
   const { data: topicsData } = useTopics();
   const allTopics = Array.isArray(topicsData) ? topicsData : [];
 
-  const rawQuestions = practiceData?.questions ?? [];
+  // FIX: SWR fetcher unwraps json.data, so practiceData IS the questions array directly.
+  // practiceData?.questions was always undefined (reading .questions on an array).
+  const rawQuestions = Array.isArray(practiceData)
+    ? practiceData
+    : practiceData?.questions ?? [];
 
   // Map backend field names → UI field names
   // Backend: problemSummary, difficulty, xpValue, companySlug (singular), topicTag
@@ -132,7 +136,7 @@ function PracticeContent() {
     leetcodeUrl: q.leetcodeUrl ?? q.externalUrl ?? null,
   }));
 
-  // Filter questions based on active category + search filter locally
+  // Filter questions based on search text only — roundType already filtered server-side
   const filteredQuestions = useMemo(() => {
     if (!activeCat) return [];
     let qs = [...allQuestions];
@@ -143,8 +147,11 @@ function PracticeContent() {
       qs = qs.filter(q => q.title?.toLowerCase().includes(qLower));
     }
     
-    // Keep only questions matching this category's roundTypes
-    return qs.filter((q: any) => activeCat.roundTypes.includes(q.roundType));
+    // NOTE: roundType is already filtered server-side via the API query param.
+    // The previous client-side filter `activeCat.roundTypes.includes(q.roundType)`
+    // was causing 0 results because normalizeQuestion may not preserve roundType
+    // and the API already handles this filter correctly.
+    return qs;
   }, [activeCat, rawQuestions, search]);
 
   const handleSelectCategory = (id: string) => {

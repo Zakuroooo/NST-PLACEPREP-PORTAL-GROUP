@@ -14,7 +14,7 @@ type AppNotification = {
   createdAt: string;
 };
 
-const IconMap: Record<string, React.ElementType> = { Trophy, BarChart, Zap, CheckCircle, FileText, Target, Star };
+const IconMap: Record<string, React.ElementType> = { Trophy, BarChart, Zap, CheckCircle, FileText, Target, Star, BellRing };
 
 function timeAgo(isoString: string): string {
   const diff = Date.now() - new Date(isoString).getTime();

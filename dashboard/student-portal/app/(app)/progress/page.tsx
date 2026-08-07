@@ -61,8 +61,11 @@ export default function ProgressPage() {
   const { data: roadmapsData, isLoading: loadingRoadmaps } = useRoadmap();
   const { data: progressData, isLoading: loadingProgress } = useProgress();
 
-  const kpis = dashboardData || {};
-  const { cells, startDate } = buildHeatmap(kpis.weeklyActivity || []);
+  // FIX: dashboardData = { student, stats, roadmaps, recentActivity }
+  // All KPI fields (problemsSolved, xpTotal, streak, etc.) live inside dashboardData.stats
+  // The old `const kpis = dashboardData || {}` was reading them at the wrong level → all 0s.
+  const kpis = dashboardData?.stats || {};
+  const { cells, startDate } = buildHeatmap(kpis.weeklyActivity || dashboardData?.recentActivity || []);
 
   // Group into 52 weeks
   const weeks: typeof cells[] = [];

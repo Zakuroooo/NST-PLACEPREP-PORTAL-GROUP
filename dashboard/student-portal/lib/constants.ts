@@ -97,6 +97,7 @@ export interface UserRoadmapCompany {
   totalWeeks: number;
   currentWeek: number;
   pctComplete: number;
+  roadmapId?: string;  // MongoDB _id of the Roadmap document — needed for weekly progress tracking
   weeks: RoadmapWeek[];
 }
 

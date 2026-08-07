@@ -5,6 +5,7 @@ import {
   Clock, CheckCircle2, AlertCircle, Send, Tag, X, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useProfile } from "@/lib/hooks";
 
 type DoubtStatus = "pending" | "answered" | "resolved";
 type DoubtTag = "DSA" | "System Design" | "LLD" | "HR" | "General";
@@ -308,6 +309,8 @@ export default function DoubtsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<"all" | DoubtStatus>("all");
+  // BUG-C FIX: Get real student name for reply authorName
+  const { data: profile } = useProfile();
 
   useEffect(() => {
     setIsLoading(true);
@@ -387,7 +390,8 @@ export default function DoubtsPage() {
     const newReply: DoubtReply = {
       id: String(Date.now()),
       author: "student",
-      authorName: "You",
+      // BUG-C FIX: Use real student name from profile instead of hardcoded "You"
+      authorName: (profile?.fullName as string) ?? "You",
       body,
       sentAt: new Date().toISOString(),
     };

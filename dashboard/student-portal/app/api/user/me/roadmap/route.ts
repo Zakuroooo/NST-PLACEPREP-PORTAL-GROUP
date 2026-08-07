@@ -98,8 +98,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw ApiError.notFound('Company not found');
     }
 
-    // FIX: Aggregate returns plain object — wrap _id in new ObjectId for Mongoose
-    const companyId = new mongoose.Types.ObjectId((company._id as any).toString());
+    // FIX: Aggregate returns plain object, string will be auto-cast by Mongoose
+    const companyId = (company._id as any).toString();
 
     const userWeeks = Math.min(Math.max(Number(preparationWeeks) || 12, 4), 52);
     const { questionsPerWeek, minFrequency } = getRoadmapParams(userWeeks);
@@ -164,7 +164,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     let newRoadmap;
     try {
       newRoadmap = await roadmapRepository.create({
-        studentId: new mongoose.Types.ObjectId(user.userId) as any,
+        studentId: user.userId as any,
         companyId: companyId as any,
         companySlug: safeSlug,
         companyName: company.name,

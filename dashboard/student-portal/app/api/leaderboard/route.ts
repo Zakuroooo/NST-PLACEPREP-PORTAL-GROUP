@@ -9,6 +9,7 @@ import { requireStudent } from 'placeprep-backend/src/utils/authMiddleware';
 import { studentService } from 'placeprep-backend/src/services/student.service';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError } from 'placeprep-backend/src/utils/apiError';
+import StudentProfile from 'placeprep-backend/src/models/StudentProfile';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -16,6 +17,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const auth = await requireStudent(request);
     const { searchParams } = new URL(request.url);
     const batch = searchParams.get('batch') || undefined;
+    // BUG-10 FIX: Read `period` param and derive a date filter for monthly mode
+    const period = searchParams.get('period') || 'alltime';
+    const since: Date | undefined = period === 'monthly'
+      ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      : undefined;
     const leaderboard = await studentService.getLeaderboard(batch);
     const withCurrentUser = leaderboard.map(entry => ({
       ...entry,
@@ -24,12 +30,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // If current user is not in the top N, fetch their rank and append
     if (!withCurrentUser.some(entry => entry.isCurrentUser)) {
-      const StudentProfile = (await import('placeprep-backend/src/models/StudentProfile')).default;
+      // BUG-36 FIX: Use statically-imported StudentProfile (no more dynamic import)
       const currentUserProfile = await StudentProfile.findOne({ userId: auth.userId });
       
       if (currentUserProfile) {
         const filter: any = { xpTotal: { $gt: currentUserProfile.xpTotal || 0 } };
         if (batch) filter.batch = batch;
+        if (since) filter.updatedAt = { $gte: since };
         const rank = await StudentProfile.countDocuments(filter) + 1;
         
         const nameParts = (currentUserProfile.fullName || '').trim().split(' ');
@@ -45,13 +52,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           batch: currentUserProfile.batch,
           branch: currentUserProfile.branch,
           xp: currentUserProfile.xpTotal ?? 0,
-          tasksCompleted: 0,
-          doubtsRaised: 0,
+          // BUG-11 FIX: tasksCompleted and doubtsRaised from real data on StudentProfile
+          tasksCompleted: currentUserProfile.questionsCompletedCount ?? 0,
+          doubtsRaised: currentUserProfile.doubtsRaisedCount ?? 0,
           placementStatus: currentUserProfile.placementStatus,
           isCurrentUser: true
         });
       }
     }
+
 
     return successResponse(withCurrentUser);
   } catch (error) {

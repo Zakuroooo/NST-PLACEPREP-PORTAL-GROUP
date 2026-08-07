@@ -4,7 +4,7 @@
  * - totalXP, questionsCompleted, sessionsCompleted, doubtsRaised, currentStreak, longestStreak
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from 'placeprep-backend/src/config/db';
+import connectDB from 'placeprep-backend/src/config/db';
 import { requireAuth } from 'placeprep-backend/src/utils/authMiddleware';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError, ApiError } from 'placeprep-backend/src/utils/apiError';
@@ -15,12 +15,12 @@ import DoubtThread from 'placeprep-backend/src/models/DoubtThread';
 
 export async function GET(req: NextRequest) {
   try {
-    const auth = await requireAuth(req);
     await connectDB();
+    const auth = await requireAuth(req);
 
     const [profile, questionsCompleted, sessionsDone, doubtsRaised] = await Promise.all([
       StudentProfile.findOne({ userId: auth.userId }).select(
-        'xpTotal currentStreakDays placementStatus targetCompanySlugs'
+        'xpTotal currentStreakDays longestStreakDays placementStatus targetCompanySlugs'
       ),
       QuestionCompletion.countDocuments({ studentId: auth.userId }),
       SessionBooking.countDocuments({ studentId: auth.userId, status: 'confirmed' }),
@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         sessionsCompleted: sessionsDone,
         doubtsRaised,
         currentStreak: profile.currentStreakDays ?? 0,
-        longestStreak: profile.currentStreakDays ?? 0,
+        longestStreak: profile.longestStreakDays ?? profile.currentStreakDays ?? 0,
         placementStatus: profile.placementStatus,
         targetCompanySlugs: profile.targetCompanySlugs ?? [],
       },

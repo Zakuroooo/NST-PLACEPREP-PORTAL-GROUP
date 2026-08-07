@@ -128,8 +128,8 @@ function SubmitContent() {
             author:       e.authorName ?? e.author ?? 'Student',
             authorRole:   e.authorRole ?? 'NST Student',
             postedAgo:    e.createdAt ? new Date(e.createdAt).toLocaleDateString() : 'Recently',
-            upvotes:      e.upvotes ?? 0,
-            hasUpvoted:   e.hasUpvoted ?? false,
+            upvotes:      e.upvoteCount ?? e.upvotes ?? 0,  // DB field is upvoteCount, not upvotes
+            hasUpvoted:   e.isUpvoted ?? e.hasUpvoted ?? false,  // DB field is isUpvoted
             hasBookmarked: e.hasBookmarked ?? false,
             rounds:       (e.rounds ?? []).map((r: any, i: number) => ({
               roundNumber:  i + 1,

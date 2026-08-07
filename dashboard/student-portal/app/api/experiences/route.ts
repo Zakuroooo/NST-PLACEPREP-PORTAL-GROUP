@@ -23,15 +23,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const { searchParams } = new URL(request.url);
     const companySlug = searchParams.get('company') || undefined;
     const page = Number(searchParams.get('page')) || 1;
+    const limit = Math.min(Number(searchParams.get('limit')) || 10, 20);
 
     const { experiences, total } = await experienceRepository.findAll({
       companySlug,
       verified: true,
       page,
-      limit: 10,
+      limit,
     });
 
-    return successResponse(experiences, { meta: { page, limit: 10, total } });
+    return successResponse(experiences, { meta: { page, limit, total } });
   } catch (error) {
     return handleApiError(error);
   }
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const profile = await studentRepository.findByUserId(user.userId);
 
     const experience = await experienceRepository.create({
-      studentId: new mongoose.Types.ObjectId(user.userId),
+      studentId: user.userId,
       studentName: profile?.fullName || user.email,
       companyId: company._id,
       companySlug: company.slug,

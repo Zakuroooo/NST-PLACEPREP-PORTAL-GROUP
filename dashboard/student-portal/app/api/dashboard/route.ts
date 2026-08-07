@@ -23,6 +23,8 @@ import { studentService } from 'placeprep-backend/src/services/student.service';
 import { studentRepository } from 'placeprep-backend/src/repositories/student.repository';
 import { roadmapRepository } from 'placeprep-backend/src/repositories/roadmap.repository';
 import { questionRepository } from 'placeprep-backend/src/repositories/question.repository';
+import QuestionCompletion from 'placeprep-backend/src/models/QuestionCompletion';
+import mongoose from 'mongoose';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError } from 'placeprep-backend/src/utils/apiError';
 
@@ -49,22 +51,54 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       let todayQs: any[] = [];
       if (activeWeek) {
         try {
-          const result = await questionRepository.findMany({
+          const topicLabel = activeWeek.topicLabel as string;
+
+          console.log(`[DASHBOARD DEBUG] company=${r.companySlug} topicLabel="${topicLabel}" weeks=${r.weeks?.length}`);
+
+          // Try 1: exact topic match (works when topicLabel === question's topic string)
+          let result = await questionRepository.findMany({
             companySlug: r.companySlug,
-            topic: activeWeek.topicLabel,
-            limit: 5,
+            topic: topicLabel,
+            limit: 20,
           });
-          const questions = result?.questions ?? result ?? [];
-          todayQs = questions.map((q: any) => ({
+          let questions = result?.questions ?? [];
+
+          console.log(`[DASHBOARD DEBUG] topic match count=${questions.length}`);
+
+          // Try 2: if exact match returns nothing, try any questions for this company
+          // (topicLabel may not match DB topics — e.g. "Arrays" vs "array")
+          if (questions.length === 0) {
+            const fallback = await questionRepository.findMany({
+              companySlug: r.companySlug,
+              limit: 20,
+            });
+            questions = fallback?.questions ?? fallback ?? [];
+            console.log(`[DASHBOARD DEBUG] fallback (no topic) count=${questions.length} for companySlug="${r.companySlug}"`);
+          }
+
+          // Get IDs of questions already completed by this student for this company
+          const completedDocs = await QuestionCompletion.find({
+            studentId: user.userId,
+            companySlug: r.companySlug,
+          }).select('questionId').lean();
+          const completedSet = new Set(completedDocs.map((c: any) => c.questionId.toString()));
+
+          // Show only incomplete questions, capped at 5
+          const incompleteQs = (questions as any[]).filter((q: any) => !completedSet.has(q._id.toString()));
+          console.log(`[DASHBOARD DEBUG] incomplete count=${incompleteQs.length}`);
+          todayQs = incompleteQs.slice(0, 5).map((q: any) => ({
             id:          q._id.toString(),
-            title:       q.problemSummary,    // BUG-D4: Question has no .title, only .problemSummary
+            title:       q.problemSummary,
             difficulty:  q.difficulty,
             xp:          q.difficulty === 'Hard' ? 50 : q.difficulty === 'Medium' ? 25 : 10,
             leetcodeUrl: q.leetcodeUrl ?? null,
           }));
-        } catch {
+        } catch (err: any) {
+          console.error(`[DASHBOARD DEBUG] error for ${r.companySlug}:`, err?.message);
           todayQs = [];
         }
+      } else {
+        console.log(`[DASHBOARD DEBUG] NO activeWeek for company=${r.companySlug} weeks=${JSON.stringify((r.weeks ?? []).map((w: any) => ({ num: w.weekNumber, status: w.status })))}`);
       }
 
       // Compute current day within the week from doneQuestions

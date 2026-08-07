@@ -311,8 +311,8 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
   );
 }
 
-// ── Session Card ──────────────────────────────────────
-function SessionCard({ session, onAcceptProposal }: { session: Session; onAcceptProposal: (id: string) => void }) {
+// ── Session Card ────────────────────────────────────
+function SessionCard({ session, onAcceptProposal, onDecline }: { session: Session; onAcceptProposal: (id: string) => void; onDecline: (id: string) => void }) {
   const { label, cls, icon: StatusIcon } = STATUS_CFG[session.status];
   const until = daysUntil(session.date);
   const showJoin = session.status === "confirmed" && new Date(session.date) >= new Date();
@@ -364,7 +364,10 @@ function SessionCard({ session, onAcceptProposal }: { session: Session; onAccept
             >
               <CheckCircle2 className="w-3 h-3" /> Accept
             </button>
-            <button className="flex items-center gap-1 text-xs font-medium border border-gray-300 text-gray-500 px-3 py-1.5 rounded hover:bg-gray-50">
+            <button
+              onClick={() => onDecline(session.id)}
+              className="flex items-center gap-1 text-xs font-medium border border-gray-300 text-gray-500 px-3 py-1.5 rounded hover:bg-gray-50 hover:border-red-300 hover:text-red-500 transition-colors"
+            >
               <XCircle className="w-3 h-3" /> Decline
             </button>
           </div>
@@ -439,10 +442,11 @@ export default function SessionsPage() {
       });
       if (res.ok) {
         const json = await res.json();
-        const s = json.data;
+        // BUG-A FIX: backend wraps booking under json.data.booking, not json.data directly
+        const booking = json.data?.booking ?? json.data;
         setSessions((prev) => prev.map((x) => x.id === optimisticId ? {
           ...x,
-          id: s._id ?? optimisticId,
+          id: booking?._id ?? optimisticId,
           status: "pending",
         } : x));
         toast.success("Session request sent! Faculty will confirm shortly.");
@@ -476,6 +480,21 @@ export default function SessionsPage() {
         .then(() => toast.success("Session confirmed! Faculty will share the meet link."))
         .catch((err) => {
           toast.error(err?.message || "Failed to confirm session.");
+          // Revert on error
+          setSessions((prev) => prev.map((s) => s.id === id ? { ...s, status: "proposed" } : s));
+        });
+    });
+  };
+
+  // BUG-17 FIX: Decline proposal handler — cancels the proposed slot via API
+  const handleDeclineProposal = (id: string) => {
+    import("@/lib/hooks").then(({ updateSessionStatus }) => {
+      // Optimistic update — move to cancelled
+      setSessions((prev) => prev.map((s) => s.id === id ? { ...s, status: "cancelled" } : s));
+      updateSessionStatus(id, 'cancel')
+        .then(() => toast.success("Proposal declined."))
+        .catch((err) => {
+          toast.error(err?.message || "Failed to decline proposal.");
           // Revert on error
           setSessions((prev) => prev.map((s) => s.id === id ? { ...s, status: "proposed" } : s));
         });
@@ -567,7 +586,7 @@ export default function SessionsPage() {
               </div>
             ) : (
               (tab === "upcoming" ? upcoming : past).map((s) => (
-                <SessionCard key={s.id} session={s} onAcceptProposal={handleAcceptProposal} />
+                <SessionCard key={s.id} session={s} onAcceptProposal={handleAcceptProposal} onDecline={handleDeclineProposal} />
               ))
             )}
           </div>

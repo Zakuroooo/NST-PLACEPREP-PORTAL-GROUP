@@ -48,8 +48,6 @@ export interface IQuestion extends Document {
     frequency: number;
     askedCount: number;
   }>;
-  targetRoles: string[];
-  interviewYear?: number;
   xpValue: number;
   isHot: boolean;
   verified: boolean;
@@ -111,13 +109,6 @@ const QuestionSchema = new Schema<IQuestion>(
         askedCount: Number,
       }
     ],
-    targetRoles: {
-      type: [String],
-      enum: ['SDE-1', 'SDE-2', 'SDE-3', 'Data Analyst', 'Product Manager', 'DevOps', 'ML Engineer', 'QA'],
-      default: ['SDE-1', 'SDE-2'],
-      index: true,
-    },
-    interviewYear: { type: Number },
     xpValue: { type: Number, default: 10 },
     isHot: { type: Boolean, default: false },
     verified: { type: Boolean, default: false },

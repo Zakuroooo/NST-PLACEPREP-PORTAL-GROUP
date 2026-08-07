@@ -37,7 +37,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     let completions: any[] = [];
     try {
       completions = await QuestionCompletion.find({
-        studentId: new mongoose.Types.ObjectId(user.userId),
+        studentId: user.userId,
       })
         .select('questionId completedAt')
         .lean();

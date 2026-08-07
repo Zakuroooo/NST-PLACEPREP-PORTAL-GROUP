@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { TrendingUp, Zap, Medal, ChevronDown, Search, Trophy } from "lucide-react";
 import Link from "next/link";
+import { useLeaderboard } from "@/lib/hooks";
 
 interface LeaderEntry {
   rank: number;
@@ -13,42 +14,32 @@ interface LeaderEntry {
   isYou: boolean;
 }
 
-function getInitials(name: string) {
-  return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-}
-
 export default function LeaderboardPage() {
-  const [leaders, setLeaders] = useState<LeaderEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [period, setPeriod] = useState<"alltime" | "monthly">("alltime");
   const [showAll, setShowAll] = useState(false);
   const VISIBLE_LIMIT = 20;
 
-  useEffect(() => {
-    setIsLoading(true);
-    fetch(`/api/leaderboard?period=${period}`, { credentials: "include" })
-      .then((r) => r.json())
-      .then((json) => {
-        const raw: any[] = json?.data ?? json?.leaderboard ?? json ?? [];
-        const mapped: LeaderEntry[] = Array.isArray(raw)
-          ? raw.map((u: any, i: number) => ({
-              rank:     u.rank    ?? u.leaderboardRank ?? i + 1,
-              name:     u.studentName ?? u.name    ?? u.fullName        ?? "Student",
-              initials: u.initials ?? getInitials(u.studentName ?? u.name ?? u.fullName ?? "ST"),
-              xp:       u.xp     ?? u.xpTotal         ?? 0,
-              change:   u.change  ?? "—",
-              time:     u.lastActivity
-                ? new Date(u.lastActivity).toLocaleDateString("en-IN", { month: "short", day: "numeric" })
-                : "—",
-              isYou:    u.isCurrentUser ?? u.isYou ?? false,
-            }))
-          : [];
-        setLeaders(mapped);
-      })
-      .catch(() => setLeaders([]))
-      .finally(() => setIsLoading(false));
-  }, [period]);
+  // BUG-E FIX: Use SWR hook instead of raw fetch + useEffect
+  const { data: rawData, isLoading } = useLeaderboard({ period });
+
+  function getInitialsLocal(name: string) {
+    return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
+  }
+
+  const leaders: LeaderEntry[] = Array.isArray(rawData)
+    ? rawData.map((u: any, i: number) => ({
+        rank:     u.rank    ?? u.leaderboardRank ?? i + 1,
+        name:     u.studentName ?? u.name    ?? u.fullName        ?? "Student",
+        initials: u.initials ?? getInitialsLocal(u.studentName ?? u.name ?? u.fullName ?? "ST"),
+        xp:       u.xp     ?? u.xpTotal         ?? 0,
+        change:   u.change  ?? "—",
+        time:     u.lastActivity
+          ? new Date(u.lastActivity).toLocaleDateString("en-IN", { month: "short", day: "numeric" })
+          : "—",
+        isYou:    u.isCurrentUser ?? u.isYou ?? false,
+      }))
+    : [];
 
   const filtered = leaders.filter((u) =>
     u.name.toLowerCase().includes(search.toLowerCase())

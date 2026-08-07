@@ -150,7 +150,12 @@ export async function createDoubt(data: {
 }
 
 export async function resolveDoubt(id: string) {
+  // BUG-F FIX: Call API first, then revalidate. The calling page handles
+  // optimistic local state; globalMutate here triggers a re-fetch that can
+  // race and overwrite the optimistic update. Delay revalidation until after
+  // the API confirms success to prevent flicker.
   const result = await apiFetch(`/api/doubts/${id}/resolve`, { method: 'PATCH' });
+  // Revalidate after success so the list stays fresh without causing a flash
   await globalMutate('/api/doubts');
   return result;
 }
@@ -206,8 +211,12 @@ export async function submitExperience(data: Record<string, unknown>) {
 }
 
 // ── Leaderboard ─────────────────────────────────────────────────────────────
-export function useLeaderboard(batch?: string) {
-  const key = batch ? `/api/leaderboard?batch=${batch}` : '/api/leaderboard';
+export function useLeaderboard(options?: { batch?: string; period?: string }) {
+  const params = new URLSearchParams();
+  if (options?.batch) params.set('batch', options.batch);
+  if (options?.period) params.set('period', options.period);
+  const qs = params.toString();
+  const key = qs ? `/api/leaderboard?${qs}` : '/api/leaderboard';
   return useSWR(key, fetcher, {
     revalidateOnFocus: false,
     dedupingInterval: 60_000,

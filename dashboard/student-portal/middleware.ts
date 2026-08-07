@@ -9,9 +9,17 @@ import { jwtVerify } from 'jose';
 
 const PUBLIC_PATHS = new Set(['/', '/login', '/api/auth/login', '/api/auth/logout']);
 
+
+// BUG-D FIX: Never fall back to a known public string in production.
+// If JWT_SECRET is not set, fail immediately so the misconfiguration is obvious.
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('[FATAL] JWT_SECRET environment variable is not set. Set it before starting the server.');
+}
+
 const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'placeprep_fallback_secret_change_in_prod'
+  process.env.JWT_SECRET || 'local-dev-only-secret-do-not-use-in-production'
 );
+
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;

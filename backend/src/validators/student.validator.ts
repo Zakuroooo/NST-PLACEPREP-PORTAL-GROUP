@@ -8,14 +8,20 @@ export const updateProfileSchema = z.object({
   phone: z.string().max(15).optional(),
   linkedinUrl: z
     .string()
-    .url('Invalid LinkedIn URL')
     .optional()
-    .or(z.literal('')),
+    .refine(
+      (val) => !val || val.trim() === '' || /^https?:\/\/.+/.test(val),
+      { message: 'Invalid LinkedIn URL' }
+    )
+    .transform((val) => (val && val.trim() === '' ? undefined : val)),
   githubUrl: z
     .string()
-    .url('Invalid GitHub URL')
     .optional()
-    .or(z.literal('')),
+    .refine(
+      (val) => !val || val.trim() === '' || /^https?:\/\/.+/.test(val),
+      { message: 'Invalid GitHub URL' }
+    )
+    .transform((val) => (val && val.trim() === '' ? undefined : val)),
   year: z.enum(['1st', '2nd', '3rd', '4th']).optional(),
   branch: z.string().min(2).trim().optional(),
   bio: z.string().max(500).optional(),

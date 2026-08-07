@@ -86,7 +86,7 @@ export const studentService = {
       {
         $group: {
           _id: {
-            $dateToString: { format: '%Y-%m-%d', date: '$completedAt' },
+            $dateToString: { format: '%Y-%m-%d', date: '$completedAt', timezone: 'Asia/Kolkata' },
           },
           count: { $sum: 1 },
         },
@@ -214,10 +214,12 @@ export const studentService = {
     const oid = new mongoose.Types.ObjectId(userId);
     const qid = new mongoose.Types.ObjectId(questionId);
 
-    // Check if already completed (unique index handles this, but let's be explicit)
+    // If already completed, return idempotently — do NOT throw.
+    // Previously this threw ApiError.conflict which caused the UI checkbox to roll back
+    // even when the question WAS completed (after page refresh, re-click = conflict = unchecked).
     const existing = await QuestionCompletion.findOne({ studentId: oid, questionId: qid });
     if (existing) {
-      throw ApiError.conflict('You have already completed this question.');
+      return { xpEarned: existing.xpEarned ?? 0, totalXp: 0, alreadyCompleted: true };
     }
 
     const xpEarned = XP_BY_DIFFICULTY[question.difficulty] || 10;
@@ -246,16 +248,82 @@ export const studentService = {
       }
     }
 
-    // XP notification
-    await notificationRepository.create({
-      userId,
-      type: 'xp',
-      title: `+${xpEarned} XP Earned`,
-      subtitle: `${question.difficulty} problem solved: ${question.problemSummary.slice(0, 60)}...`,
-      iconName: 'Zap',
-    });
+    // B18 FIX: Update streak based on IST date of last activity
+    try {
+      const profile = await StudentProfile.findOne({ userId: new mongoose.Types.ObjectId(userId) });
+      if (profile) {
+        const nowIST = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        const todayIST = new Date(nowIST.getFullYear(), nowIST.getMonth(), nowIST.getDate());
+
+        let newStreak = 1; // default: start/reset streak
+        if (profile.lastActiveAt) {
+          const lastIST = new Date(profile.lastActiveAt.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          const lastDayIST = new Date(lastIST.getFullYear(), lastIST.getMonth(), lastIST.getDate());
+          const diffDays = Math.round((todayIST.getTime() - lastDayIST.getTime()) / (1000 * 60 * 60 * 24));
+
+          if (diffDays === 0) {
+            // Solved another question today — keep current streak
+            newStreak = profile.currentStreakDays || 1;
+          } else if (diffDays === 1) {
+            // Solved yesterday → increment streak
+            newStreak = (profile.currentStreakDays || 0) + 1;
+          } else {
+            // Gap > 1 day → streak resets to 1
+            newStreak = 1;
+          }
+        }
+        await studentRepository.updateStreak(userId, newStreak);
+      }
+    } catch (_streakErr) {
+      // Streak update failure should never block the completion response
+    }
+
+    // B14 FIX: Removed XP persistent notification — XP feedback is toast-only in the UI
+    // (previously this created a permanent notification in the bell for every solved question)
 
     return { xpEarned, totalXp: 0 }; // totalXp fetched fresh by client
+  },
+
+  async uncompleteQuestion(userId: string, questionId: string): Promise<void> {
+    const oid = new mongoose.Types.ObjectId(userId);
+    const qid = new mongoose.Types.ObjectId(questionId);
+
+    // Find the completion record
+    const completion = await QuestionCompletion.findOne({ studentId: oid, questionId: qid });
+    if (!completion) return; // already not completed, nothing to do
+
+    const xpToDeduct = completion.xpEarned ?? 0;
+
+    // Remove completion record + deduct XP atomically
+    await Promise.all([
+      QuestionCompletion.deleteOne({ studentId: oid, questionId: qid }),
+      StudentProfile.findOneAndUpdate(
+        { userId },
+        { $inc: { xpTotal: -xpToDeduct } }
+      ),
+    ]);
+
+    // If this question was part of a roadmap, decrement doneQuestions
+    if (completion.roadmapId) {
+      const roadmap = await import('../models/UserRoadmap').then(m => m.default);
+      const rm = await roadmap.findById(completion.roadmapId);
+      if (rm) {
+        // Find the week this question belonged to (by companySlug match)
+        const activeWeek = rm.weeks.find((w: any) => w.status === 'active' || w.status === 'done');
+        if (activeWeek && activeWeek.doneQuestions > 0) {
+          activeWeek.doneQuestions -= 1;
+          // If week was marked done but now has undone questions, reactivate it
+          if (activeWeek.status === 'done' && activeWeek.doneQuestions < activeWeek.totalQuestions) {
+            activeWeek.status = 'active';
+          }
+          // Recalculate pctComplete
+          const totalQ = rm.weeks.reduce((acc: number, w: any) => acc + w.totalQuestions, 0);
+          const doneQ = rm.weeks.reduce((acc: number, w: any) => acc + w.doneQuestions, 0);
+          rm.pctComplete = totalQ > 0 ? Math.round((doneQ / totalQ) * 100) : 0;
+          await rm.save();
+        }
+      }
+    }
   },
 
   async getLeaderboard(batch?: string, period?: string) {

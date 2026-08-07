@@ -28,3 +28,19 @@ export async function POST(
     return handleApiError(error);
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  try {
+    await connectDB();
+    const user = await requireStudent(request);
+    const { id } = await params;
+
+    await studentService.uncompleteQuestion(user.userId, id);
+    return successResponse({ removed: true }, { message: 'Question unmarked' } as any);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}

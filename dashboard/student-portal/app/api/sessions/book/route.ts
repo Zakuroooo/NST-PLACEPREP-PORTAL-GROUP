@@ -3,7 +3,7 @@
  * Student books a 1:1 session with a faculty member.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { connectDB } from 'placeprep-backend/src/config/db';
+import connectDB from 'placeprep-backend/src/config/db';
 import { requireAuth } from 'placeprep-backend/src/utils/authMiddleware';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError, ApiError } from 'placeprep-backend/src/utils/apiError';

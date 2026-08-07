@@ -41,37 +41,54 @@ export default function CompanyPracticePage({
     typeof resolvedSearchParams.topic === "string" ? resolvedSearchParams.topic : ""
   );
   const [difficulty, setDifficulty] = useState<Difficulty | "">("");
-  const [roundType, setRoundType] = useState<RoundType | "">("");
+  const [roundType, setRoundType] = useState<RoundType | "">("Coding");
   const [weekFilter, setWeekFilter] = useState<number | "">("");
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 100;
 
-  // Fetch from practice API
-  const { data: practiceRes } = usePractice({
+  // Reset page to 1 when any filter changes
+  const handleTopicChange = (val: string) => { setTopic(val); setPage(1); };
+  const handleDifficultyChange = (val: Difficulty | "") => { setDifficulty(val); setPage(1); };
+  const handleRoundTypeChange = (val: RoundType | "") => { setRoundType(val); setPage(1); };
+  const handleSearchChange = (val: string) => { setSearch(val); setPage(1); };
+
+  // Fetch current page from API — server-side filters
+  const { data: practiceRes, isLoading: questionsLoading } = usePractice({
     company: slug,
     topic,
     difficulty,
+    roundType: roundType || undefined,
+    page,
+    limit: PAGE_SIZE,
   });
-  const rawQuestions = practiceRes?.data?.questions ?? practiceRes?.questions ?? [];
+
+  // SWR fetcher unwraps json.data so practiceRes IS the array directly
+  const rawQuestions = Array.isArray(practiceRes)
+    ? practiceRes
+    : practiceRes?.questions ?? [];
+
+  // Total pages estimate from returned count
+  const hasNextPage = rawQuestions.length === PAGE_SIZE;
+  const hasPrevPage = page > 1;
 
   const filtered = useMemo(() => {
     let list = [...rawQuestions];
-
-    // Local filters
-    if (roundType) {
-      list = list.filter((q) => q.roundType === roundType);
-    }
+    // roundType is already filtered server-side; only apply search + weekFilter locally
     if (search.trim()) {
-      const qLower = search.toLowerCase();
-      list = list.filter((q) => q.title?.toLowerCase().includes(qLower));
+      const q = search.toLowerCase();
+      list = list.filter((item) => item.title?.toLowerCase().includes(q));
     }
-
     if (weekFilter !== "" && activeRoadmap) {
       const selectedWeek = activeRoadmap.weeks.find((w: any) => w.weekNumber === Number(weekFilter));
       if (selectedWeek) {
-        const weekQIds = new Set(selectedWeek.tasks?.map((t: any) => typeof t.questionId === 'object' ? t.questionId._id : t.questionId));
-        list = list.filter((q) => weekQIds.has(q._id));
+        const weekQIds = new Set(
+          selectedWeek.tasks?.map((t: any) =>
+            typeof t.questionId === "object" ? t.questionId._id : t.questionId
+          )
+        );
+        list = list.filter((item) => weekQIds.has(item._id));
       }
     }
-
     return list;
   }, [rawQuestions, roundType, search, weekFilter, activeRoadmap]);
 
@@ -131,7 +148,7 @@ export default function CompanyPracticePage({
             type="text"
             placeholder="Search questions..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full pl-8 pr-8 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50"
           />
           {search && (
@@ -144,7 +161,7 @@ export default function CompanyPracticePage({
         {/* Topic */}
         <select
           value={topic}
-          onChange={(e) => setTopic(e.target.value)}
+          onChange={(e) => handleTopicChange(e.target.value)}
           className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-gray-700"
         >
           <option value="">All Topics</option>
@@ -154,7 +171,7 @@ export default function CompanyPracticePage({
         {/* Round type (available here since this is company-specific) */}
         <select
           value={roundType}
-          onChange={(e) => setRoundType(e.target.value as RoundType | "")}
+          onChange={(e) => handleRoundTypeChange(e.target.value as RoundType | "")}
           className="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 text-gray-700"
         >
           <option value="">All Rounds</option>
@@ -171,7 +188,7 @@ export default function CompanyPracticePage({
           {(["", "Easy", "Medium", "Hard"] as const).map((d) => (
             <button
               key={d || "all"}
-              onClick={() => setDifficulty(d as Difficulty | "")}
+              onClick={() => handleDifficultyChange(d as Difficulty | "")}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                 difficulty === d
                   ? d === "Easy"   ? "bg-green-600 text-white" :
@@ -221,9 +238,9 @@ export default function CompanyPracticePage({
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm text-gray-900 truncate">{q.title}</div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                    <span className="text-xs text-gray-500">{q.topic}</span>
-                    {q.hot && <span className="text-xs bg-red-50 text-red-600 rounded px-1.5 py-0.5"><Flame className="w-3 h-3 mr-1 inline-block" /> Hot</span>}
-                    {q.frequency && (
+                    {q.topic && <span className="text-xs text-gray-500">{q.topic}</span>}
+                    {q.hot && <span className="text-xs bg-red-50 text-red-600 rounded px-1.5 py-0.5"><Flame className="w-3 h-3 mr-1 inline-block" />Hot</span>}
+                    {q.frequency > 0 && (
                       <span className="text-xs text-gray-400">Asked in {q.frequency}% of interviews</span>
                     )}
                   </div>
@@ -260,8 +277,34 @@ export default function CompanyPracticePage({
         )}
       </div>
 
-      <p className="text-xs text-gray-400 text-center mt-4">
-        Showing {filtered.length} questions for {intel?.name || slug} · More coming as community contributes
+      {/* Prev / Next page navigation — replaces current 100 with adjacent page's 100 */}
+      {(hasPrevPage || hasNextPage) && (
+        <div className="flex items-center justify-between mt-4 px-1">
+          <p className="text-xs text-gray-400">
+            Page {page} &middot; {filtered.length} questions{!hasNextPage ? " · Last page" : ""}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              disabled={!hasPrevPage || questionsLoading}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ArrowLeft className="w-4 h-4" /> Prev
+            </button>
+            <span className="text-sm font-bold text-gray-700 min-w-[2rem] text-center">{page}</span>
+            <button
+              onClick={() => { setPage((p) => p + 1); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+              disabled={!hasNextPage || questionsLoading}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold border border-gray-200 rounded-lg bg-white hover:bg-gray-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next <ArrowLeft className="w-4 h-4 rotate-180" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <p className="text-xs text-gray-400 text-center mt-2">
+        {intel?.name || slug} &middot; {roundType || "All rounds"} &middot; {questionsLoading ? "Loading..." : `${filtered.length} on page ${page}`}
       </p>
     </div>
   );

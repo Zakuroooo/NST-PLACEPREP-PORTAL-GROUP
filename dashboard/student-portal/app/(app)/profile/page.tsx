@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { updateProfile, useProfile, useRoadmap } from "@/lib/hooks";
+import { toast } from "sonner";
 import {
  User, Settings, BarChart2, Bell,
  Edit2, Flame, RotateCcw, Trash2, AlertTriangle,
@@ -122,7 +123,6 @@ function OverviewTab({ user, onEdit }: { user: any; onEdit: () => void }) {
  const [isUploading, setIsUploading] = useState(false);
 
  const handleSave = async () => {
-  setEditing(false);
   try {
    // Normalize URLs: validator requires https:// prefix
    const normalizeUrl = (val: string, domain: string) => {
@@ -137,10 +137,15 @@ function OverviewTab({ user, onEdit }: { user: any; onEdit: () => void }) {
     linkedinUrl: normalizeUrl(linkedin, 'linkedin'),
     githubUrl: normalizeUrl(github, 'github'),
    });
+   setEditing(false);
    setSaved(true);
    setTimeout(() => setSaved(false), 2000);
-  } catch (err) {
+  } catch (err: any) {
+   // BUG-B FIX: Show user-visible error — previously only console.error
+   const msg = err?.message || 'Failed to update profile. Please try again.';
+   toast.error(msg);
    console.error("Failed to update profile", err);
+   // Keep editing=true so user can retry (don't close the form on failure)
   }
  };
 
@@ -347,8 +352,11 @@ function CareerTab({ user }: { user: typeof defaultUser }) {
    });
    setSaved(true);
    setTimeout(() => setSaved(false), 2500);
-   sessionStorage.setItem("career_settings", JSON.stringify({ categories, companies, domains, prepWeeks, skills }));
-  } catch (err) {
+   // BUG-H FIX: Removed dead sessionStorage.setItem("career_settings", ...) —
+   // the data was never read back; real data comes from useProfile() SWR hook.
+  } catch (err: any) {
+   // BUG-H FIX: Show user-visible error instead of silent console.error
+   toast.error(err?.message || 'Failed to save career settings. Please try again.');
    console.error("Failed to update career settings", err);
   }
  };
@@ -521,14 +529,23 @@ function PerformanceTab({ user }: { user: typeof defaultUser }) {
  if (total >= 100) computedBadges.push("Problem Master");
  if (user.solved.hard >= 5) computedBadges.push("Speed Coder");
 
- // Generate 364 days (52 weeks) of dummy activity — proper GitHub heatmap dimensions
+ // BUG-G FIX: Replace random Math.random() heatmap with deterministic estimated activity.
+ // Real API endpoint for daily activity is not yet implemented; this seeds a stable,
+ // non-random estimate from the user's actual streak, solved count, and XP.
+ // Each render produces the same values (deterministic from user data).
  const heatmapData = Array.from({ length: 364 }, (_, i) => {
-  const rand = Math.random();
-  // Simulate a realistic activity pattern: more active on weekdays, some heavy days
-  const dayOfWeek = i % 7;
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-  if (isWeekend) return rand > 0.85 ? 1 : 0;
-  if (rand > 0.55) return rand > 0.85 ? 3 : rand > 0.72 ? 2 : 1;
+  // Use XP and solved as a deterministic seed — no Math.random()
+  const daysSinceEnd = 363 - i;
+  // Within streak window: mark as active
+  if (daysSinceEnd < user.streak) return 2;
+  // Estimate solved distribution over last 180 days
+  const activePeriod = Math.min(user.solved.easy + user.solved.medium + user.solved.hard, 180);
+  const solveRate = activePeriod / 364;
+  // Deterministic pseudo-activity based on problem counts and index
+  const seed = (user.xp + i * 7 + user.streak * 3) % 17;
+  if (daysSinceEnd < 180 && seed < Math.round(solveRate * 17)) {
+   return seed < 3 ? 3 : seed < 7 ? 2 : 1;
+  }
   return 0;
  });
 
