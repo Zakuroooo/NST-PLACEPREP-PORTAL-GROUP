@@ -55,7 +55,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const profile = await studentRepository.findByUserId(user.userId);
 
     const experience = await experienceRepository.create({
-      studentId: user.userId,
+      studentId: new mongoose.Types.ObjectId(user.userId),
       studentName: profile?.fullName || user.email,
       companyId: company._id,
       companySlug: company.slug,
