@@ -130,9 +130,12 @@ export function SidebarContent() {
           Help
         </Link>
         <button
-          onClick={() => {
-            document.cookie = "admin_authed=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-            window.location.href = "/login";
+          onClick={async () => {
+            await fetch("/api/auth/logout", { method: "POST" });
+            const loginUrl = process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL
+              ? `${process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL}/login`
+              : "http://localhost:3000/login";
+            window.location.href = loginUrl;
           }}
           className="w-full group flex items-center gap-2.5 rounded-md px-3 py-2 text-xs font-medium text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors cursor-pointer"
         >
