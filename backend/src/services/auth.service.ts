@@ -65,11 +65,15 @@ export const authService = {
       name = 'Administrator';
     }
 
-    // Redirect URL per role
+    // Redirect URL per role.
+    // In production, faculty and admin are accessed via path-based routing
+    // on the main student-portal domain (e.g. placeprep.com/faculty).
+    // NEXT_PUBLIC_STUDENT_PORTAL_URL is the shared root domain for all portals.
+    const studentUrl = process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || 'http://localhost:3000';
     const baseUrls: Record<string, string> = {
-      student: process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || 'http://localhost:3000',
-      faculty: process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL || 'http://localhost:3001',
-      admin: process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL || 'http://localhost:3002',
+      student: studentUrl,
+      faculty: process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL || `http://localhost:3001`,
+      admin:   process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL   || `http://localhost:3002`,
     };
 
     const redirectUrl = baseUrls[user.role] || baseUrls.student;

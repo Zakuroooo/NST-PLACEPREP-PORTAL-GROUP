@@ -13,8 +13,9 @@ const PUBLIC_PATHS = ['/api/auth'];
 // Central login page — hosted on student portal
 const UNIFIED_LOGIN_URL =
   process.env.NEXT_PUBLIC_LOGIN_URL ||
-  process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL + '/login' ||
-  'http://localhost:3000/login';
+  (process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL
+    ? `${process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL}/login`
+    : "http://localhost:3000/login");
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'placeprep_fallback_secret_change_in_prod'
