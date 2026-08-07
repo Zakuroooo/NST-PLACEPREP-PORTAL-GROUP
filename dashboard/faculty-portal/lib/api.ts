@@ -80,6 +80,9 @@ export interface StudentMatrixEntry {
   placementStatus: string;
   targetCompanySlugs: string[];
   lastActiveAt?: string;
+  rankChange?: number | string;
+  subjectBreakdown?: { dsa: number; sysdesign: number; webdev: number; dbms: number; cloud: number };
+  recentMocks?: any[];
 }
 
 export interface NotificationData {

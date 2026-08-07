@@ -107,7 +107,7 @@ export default function ProfilePage() {
             </div>
             <button 
               onClick={() => {
-                setFormData({ ...profile });
+                setFormData({ ...profile, expertisesStr: profile.expertises.join(', ') });
                 setEditModalOpen(true);
               }}
               className="bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors cursor-pointer"
@@ -124,7 +124,7 @@ export default function ProfilePage() {
           <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
             <h3 className="text-sm font-semibold text-gray-900 mb-4 uppercase tracking-wider">Expertise</h3>
             <div className="flex flex-wrap gap-2">
-              {profile.expertises.map(tag => (
+              {profile.expertises.map((tag: string) => (
                 <span key={tag} className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-md text-xs font-medium">
                   {tag}
                 </span>

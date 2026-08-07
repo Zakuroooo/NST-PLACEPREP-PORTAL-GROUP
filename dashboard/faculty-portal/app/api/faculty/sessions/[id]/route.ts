@@ -54,6 +54,8 @@ export async function PATCH(
           : 'Alternative time proposed.',
     });
   } catch (error) {
-    require("fs").appendFileSync("api-error.log", JSON.stringify({err: error?.message || error, stack: error?.stack}) + "\n"); return handleApiError(error);
+    const err = error as any;
+    require("fs").appendFileSync("/tmp/api-error.log", JSON.stringify({err: err?.message || err, stack: err?.stack}) + "\n");
+    return handleApiError(error);
   }
 }

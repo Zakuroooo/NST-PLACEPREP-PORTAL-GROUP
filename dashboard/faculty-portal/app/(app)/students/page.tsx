@@ -53,7 +53,7 @@ function mapStudent(s: StudentMatrixEntry, idx: number): StudentProgress {
     easy: Math.round(s.totalSolved * 0.5),
     medium: Math.round(s.totalSolved * 0.35),
     hard: Math.round(s.totalSolved * 0.15),
-    change: s.rankChange || "—",
+    change: s.rankChange !== undefined ? String(s.rankChange) : "—",
     mentoredByMe: false,
     lastActive: s.lastActiveAt ? new Date(s.lastActiveAt).toLocaleDateString() : "Unknown",
     subjectBreakdown: s.subjectBreakdown || { dsa: 70, sysdesign: 50, webdev: 60, dbms: 65, cloud: 55 },
