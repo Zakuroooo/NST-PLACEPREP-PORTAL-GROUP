@@ -130,7 +130,7 @@ QuestionSchema.index({ problemSummary: 'text' }); // full-text search
 QuestionSchema.index({ frequencyScore: -1 }); // for sorting by frequency
 // BUG-R3: Compound index for role-filtered roadmap queries
 QuestionSchema.index({ companySlug: 1, targetRoles: 1, frequencyScore: -1 });
-QuestionSchema.index({ companySlug: 1, topics: 1, targetRoles: 1, frequencyScore: -1 });
+// NOTE: Cannot index both topics[] and targetRoles[] together (parallel arrays not allowed in MongoDB)
 
 const Question: Model<IQuestion> =
   mongoose.models.Question || mongoose.model<IQuestion>('Question', QuestionSchema);
