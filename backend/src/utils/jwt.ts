@@ -6,19 +6,21 @@
 import jwt from 'jsonwebtoken';
 import type { JwtPayload } from '../types/shared.types';
 
-const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
-if (!JWT_SECRET) {
-  throw new Error('[PlacePrep Auth] JWT_SECRET is not defined. Set it in .env.local');
-}
-
-if (JWT_SECRET.length < 32) {
-  throw new Error(
-    `[PlacePrep Auth] JWT_SECRET is too short (${JWT_SECRET.length} chars). ` +
-    'Minimum 32 characters required to prevent token forgery. ' +
-    'Generate one with: openssl rand -hex 32'
-  );
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('[PlacePrep Auth] JWT_SECRET is not defined. Set it in .env.local');
+  }
+  if (secret.length < 32) {
+    throw new Error(
+      `[PlacePrep Auth] JWT_SECRET is too short (${secret.length} chars). ` +
+      'Minimum 32 characters required to prevent token forgery. ' +
+      'Generate one with: openssl rand -hex 32'
+    );
+  }
+  return secret;
 }
 
 /**
@@ -31,7 +33,7 @@ export function signToken(payload: { userId: string; role: string; email: string
       role: payload.role,
       email: payload.email,
     },
-    JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'] }
   );
 }
@@ -42,7 +44,7 @@ export function signToken(payload: { userId: string; role: string; email: string
  */
 export function verifyToken(token: string): JwtPayload | null {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;
+    const decoded = jwt.verify(token, getJwtSecret()) as JwtPayload;
     return decoded;
   } catch {
     return null;
