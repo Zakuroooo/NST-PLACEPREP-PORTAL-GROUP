@@ -1,12 +1,20 @@
 /**
  * dashboard/faculty-portal/middleware.ts
  * JWT cookie middleware for faculty portal — only 'faculty' role tokens allowed.
+ * Unauthenticated / unauthorized requests are sent to the Unified Login Page
+ * hosted on the student portal.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const PUBLIC_PATHS = ['/login', '/api/auth'];
+const PUBLIC_PATHS = ['/api/auth'];
+
+// Central login page — hosted on student portal
+const UNIFIED_LOGIN_URL =
+  process.env.NEXT_PUBLIC_LOGIN_URL ||
+  process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL + '/login' ||
+  'http://localhost:3000/login';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'placeprep_fallback_secret_change_in_prod'
@@ -28,34 +36,23 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
 
   if (!isPublic) {
     if (!token) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL(UNIFIED_LOGIN_URL));
     }
 
     try {
       const { payload } = await jwtVerify(token, JWT_SECRET);
 
       if (payload.role !== 'faculty') {
-        const response = NextResponse.redirect(new URL('/login', request.url));
+        const response = NextResponse.redirect(new URL(UNIFIED_LOGIN_URL));
         response.cookies.set('placeprep_token_faculty', '', { maxAge: 0, path: '/' });
         response.cookies.set('placeprep_token', '', { maxAge: 0, path: '/' });
         return response;
       }
     } catch {
-      const response = NextResponse.redirect(new URL('/login', request.url));
+      const response = NextResponse.redirect(new URL(UNIFIED_LOGIN_URL));
       response.cookies.set('placeprep_token_faculty', '', { maxAge: 0, path: '/' });
       response.cookies.set('placeprep_token', '', { maxAge: 0, path: '/' });
       return response;
-    }
-  }
-
-  if (pathname === '/login' && token) {
-    try {
-      const { payload } = await jwtVerify(token, JWT_SECRET);
-      if (payload.role === 'faculty') {
-        return NextResponse.redirect(new URL('/', request.url));
-      }
-    } catch {
-      // Invalid token — stay on login
     }
   }
 

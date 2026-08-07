@@ -72,7 +72,10 @@ export function SidebarContent() {
         <button
           onClick={async () => {
             await fetch("/api/auth/logout", { method: "POST" });
-            window.location.href = "/login";
+            const loginUrl = process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL
+              ? `${process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL}/login`
+              : "http://localhost:3000/login";
+            window.location.href = loginUrl;
           }}
           className="w-full group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-600 hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
         >
