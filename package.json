@@ -5,6 +5,9 @@
     "backend",
     "dashboard/*"
   ],
+  "scripts": {
+    "dev": "npm run dev --workspace=student-portal & npm run dev --workspace=faculty-portal & npm run dev --workspace=admin-portal & wait"
+  },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
     "@types/uuid": "^10.0.0"
