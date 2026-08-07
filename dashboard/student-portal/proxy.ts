@@ -21,7 +21,7 @@ const JWT_SECRET = new TextEncoder().encode(
 );
 
 
-export async function middleware(request: NextRequest): Promise<NextResponse> {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
   // Allow static assets, Next.js internals, and public paths
