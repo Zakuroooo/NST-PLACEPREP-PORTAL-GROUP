@@ -82,7 +82,7 @@ export default function ProfilePage() {
         <div className="px-6 pb-6 relative">
           <div className="w-24 h-24 rounded-full border-4 border-white bg-blue-100 flex items-center justify-center -mt-12 mb-4 shadow-sm overflow-hidden">
              <div className="flex items-center justify-center w-full h-full bg-blue-600 text-white text-3xl font-bold">
-               {profile.name.split(" ").map(n => n[0]).join("")}
+               {profile.name.split(" ").map((n: string) => n[0]).join("")}
              </div>
           </div>
           <div className="flex justify-between items-start">
