@@ -76,9 +76,12 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   // Secure dynamic CORS for cross-portal API calls (like Faculty login)
   const origin = request.headers.get('origin');
   const allowedOrigins = [
-    process.env.NEXT_PUBLIC_STUDENT_URL || 'http://localhost:3000',
-    process.env.NEXT_PUBLIC_FACULTY_URL || 'http://localhost:3001',
-    process.env.NEXT_PUBLIC_ADMIN_URL   || 'http://localhost:3002',
+    process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || 'https://nst-prep-portal-by-pranay-student-p.vercel.app',
+    process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL || process.env.NEXT_PUBLIC_FACULTY_URL || 'https://nst-prep-portal-by-pranay-faculty-portal-aanchv5wk.vercel.app',
+    process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL   || process.env.NEXT_PUBLIC_ADMIN_URL   || 'https://nst-prep-portal-by-pranay-admin-portal-fpdq0kwf2.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3002',
     'http://192.168.0.127:3000',
     'http://192.168.0.127:3001',
     'http://192.168.0.127:3002'

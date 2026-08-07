@@ -11,8 +11,14 @@ import type { NextConfig } from "next";
  *   NEXT_PUBLIC_ADMIN_URL    — e.g. https://admin-portal-xyz.vercel.app
  */
 
-const FACULTY_URL = process.env.NEXT_PUBLIC_FACULTY_URL || "http://localhost:3001";
-const ADMIN_URL   = process.env.NEXT_PUBLIC_ADMIN_URL   || "http://localhost:3002";
+const FACULTY_URL =
+  process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL ||
+  process.env.NEXT_PUBLIC_FACULTY_URL ||
+  'https://nst-prep-portal-by-pranay-faculty-portal-aanchv5wk.vercel.app';
+const ADMIN_URL =
+  process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL ||
+  process.env.NEXT_PUBLIC_ADMIN_URL ||
+  'https://nst-prep-portal-by-pranay-admin-portal-fpdq0kwf2.vercel.app';
 
 const nextConfig: NextConfig = {
   experimental: {
