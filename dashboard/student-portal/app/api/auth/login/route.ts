@@ -73,8 +73,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // This is more reliable than the shared backend service resolving env vars.
     const PORTAL_URLS: Record<string, string> = {
       student: process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || 'https://nst-prep-portal-by-pranay-student-p.vercel.app',
-      faculty: process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL || 'https://nst-prep-portal-by-pranay-faculty-portal-aanchv5wk.vercel.app',
-      admin:   process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL   || 'https://nst-prep-portal-by-pranay-admin-portal-fpdq0kwf2.vercel.app',
+      faculty: process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL || 'https://nst-prep-portal-by-pranay-faculty-p-ten.vercel.app',
+      admin:   process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL   || 'https://nst-prep-portal-by-pranay-admin-por.vercel.app',
     };
     const redirectUrl = PORTAL_URLS[result.role] || PORTAL_URLS.student;
 

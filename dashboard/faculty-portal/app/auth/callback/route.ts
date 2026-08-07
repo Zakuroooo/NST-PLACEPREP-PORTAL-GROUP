@@ -15,7 +15,7 @@ const LOGIN_URL =
   process.env.NEXT_PUBLIC_LOGIN_URL ||
   (process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL
     ? `${process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL}/login`
-    : 'http://localhost:3000/login');
+    : 'https://nst-prep-portal-by-pranay-student-p.vercel.app/login');
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const { searchParams } = request.nextUrl;

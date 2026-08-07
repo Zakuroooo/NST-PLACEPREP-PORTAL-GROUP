@@ -48,7 +48,7 @@ export const inviteService = {
     if (existing) {
       // Return the existing invite URL instead of creating a duplicate
       const facultyBaseUrl =
-        process.env.NEXT_PUBLIC_FACULTY_URL || 'http://localhost:3001';
+        process.env.NEXT_PUBLIC_FACULTY_URL || 'https://nst-prep-portal-by-pranay-faculty-p-ten.vercel.app';
       return {
         invite: existing,
         inviteUrl: `${facultyBaseUrl}/invite/${existing.token}`,
@@ -70,7 +70,7 @@ export const inviteService = {
     });
 
     const facultyBaseUrl =
-      process.env.NEXT_PUBLIC_FACULTY_URL || 'http://localhost:3001';
+      process.env.NEXT_PUBLIC_FACULTY_URL || 'https://nst-prep-portal-by-pranay-faculty-p-ten.vercel.app';
 
     return {
       invite,

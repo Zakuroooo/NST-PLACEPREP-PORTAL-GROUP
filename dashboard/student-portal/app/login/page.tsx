@@ -26,7 +26,14 @@ export default function UnifiedLoginPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error?.message || data.message || "Login failed. Please check your credentials.");
+        // Surface field-level validation details when present (e.g. "Please enter a valid email address")
+        const fieldErrors = data.error?.details;
+        const firstFieldError =
+          fieldErrors &&
+          Object.values(fieldErrors as Record<string, string[]>)
+            .flat()
+            .find(Boolean);
+        setError(firstFieldError || data.error?.message || data.message || "Login failed. Please check your credentials.");
         return;
       }
 
