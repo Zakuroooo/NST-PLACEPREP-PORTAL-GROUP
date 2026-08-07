@@ -17,6 +17,12 @@ const UNIFIED_LOGIN_URL =
     ? `${process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL}/login`
     : "https://nst-prep-portal-by-pranay-student-p.vercel.app/login");
 
+// FAIL LOUD: If JWT_SECRET is missing in production, the fallback secret will
+// silently reject ALL tokens from the student portal. Throw immediately.
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('[FATAL] JWT_SECRET is not set in admin portal env vars. Set it in Vercel dashboard.');
+}
+
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'placeprep_fallback_secret_change_in_prod'
 );
