@@ -36,9 +36,9 @@ export interface IUserRoadmap extends Document {
   pctComplete: number;
   isActive: boolean;
   weeks: IRoadmapWeek[];
-  // BUG-PR2 FIX: track when student last practiced for this roadmap
   lastActive?: Date;
   isSeeded?: boolean;
+  addedAt?: Date;
 }
 
 const RoadmapWeekSchema = new Schema<IRoadmapWeek>(
