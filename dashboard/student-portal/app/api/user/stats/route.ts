@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
         sessionsCompleted: sessionsDone,
         doubtsRaised,
         currentStreak: profile.currentStreakDays ?? 0,
-        longestStreak: profile.longestStreakDays ?? profile.currentStreakDays ?? 0,
+        longestStreak: profile.bestStreakDays ?? profile.currentStreakDays ?? 0,
         placementStatus: profile.placementStatus,
         targetCompanySlugs: profile.targetCompanySlugs ?? [],
       },
