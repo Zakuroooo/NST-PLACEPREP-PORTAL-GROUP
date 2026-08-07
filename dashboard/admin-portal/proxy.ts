@@ -15,7 +15,7 @@ const UNIFIED_LOGIN_URL =
   process.env.NEXT_PUBLIC_LOGIN_URL ||
   (process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL
     ? `${process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL}/login`
-    : "http://localhost:3000/login");
+    : "https://nst-prep-portal-by-pranay-student-p.vercel.app/login");
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'placeprep_fallback_secret_change_in_prod'

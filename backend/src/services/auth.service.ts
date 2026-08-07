@@ -66,14 +66,21 @@ export const authService = {
     }
 
     // Redirect URL per role.
-    // In production, faculty and admin are accessed via path-based routing
-    // on the main student-portal domain (e.g. placeprep.com/faculty).
-    // NEXT_PUBLIC_STUDENT_PORTAL_URL is the shared root domain for all portals.
-    const studentUrl = process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || 'http://localhost:3000';
+    // Hardcoded production URLs as fallbacks — env vars override in local dev.
+    const studentUrl =
+      process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL ||
+      'https://nst-prep-portal-by-pranay-student-p.vercel.app';
+    const facultyUrl =
+      process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL ||
+      'https://nst-prep-portal-by-pranay-faculty-portal-aanchv5wk.vercel.app';
+    const adminUrl =
+      process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL ||
+      'https://nst-prep-portal-by-pranay-admin-portal-fpdq0kwf2.vercel.app';
+
     const baseUrls: Record<string, string> = {
       student: studentUrl,
-      faculty: process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL || `http://localhost:3001`,
-      admin:   process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL   || `http://localhost:3002`,
+      faculty: facultyUrl,
+      admin:   adminUrl,
     };
 
     const redirectUrl = baseUrls[user.role] || baseUrls.student;
