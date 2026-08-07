@@ -1,20 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { Eye, EyeOff, Loader2, GraduationCap, Trophy, BookOpen, Zap } from "lucide-react";
+import { Eye, EyeOff, Loader2, Shield, Trophy, BookOpen, Zap } from "lucide-react";
 
-const STUDENT_LOGIN_URL =
-  process.env.NEXT_PUBLIC_STUDENT_PORTAL_URL || "http://localhost:3000";
-
-// Dedicated env vars — avoids fragile string replacement on the URL
-const FACULTY_PORTAL_URL =
-  process.env.NEXT_PUBLIC_FACULTY_PORTAL_URL || "http://localhost:3001";
-const ADMIN_PORTAL_URL =
-  process.env.NEXT_PUBLIC_ADMIN_PORTAL_URL || "http://localhost:3002";
-
-export default function StudentLoginPage() {
-  const router = useRouter();
+export default function UnifiedLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -41,12 +30,16 @@ export default function StudentLoginPage() {
         return;
       }
 
-      if (data.data.role !== "student") {
-        setError("This portal is for students only. Please use the correct portal.");
-        return;
-      }
+      const { role, redirectUrl } = data.data;
 
-      router.push("/dashboard");
+      // Redirect based on role — backend determines the correct portal URL
+      if (role === "student") {
+        // Student stays on same origin — use client-side navigation
+        window.location.href = `${redirectUrl}/dashboard`;
+      } else {
+        // Faculty and Admin are cross-origin portals — hard redirect
+        window.location.href = redirectUrl;
+      }
     } catch {
       setError("Unable to connect. Please check your internet connection.");
     } finally {
@@ -82,8 +75,8 @@ export default function StudentLoginPage() {
               </span>
             </h1>
             <p className="text-gray-400 text-base leading-relaxed max-w-xs">
-              Practice smarter with real NST interview data, personalized
-              roadmaps, and direct faculty mentorship.
+              One login for everyone — students, faculty, and admins are
+              automatically directed to their portal.
             </p>
           </div>
 
@@ -125,14 +118,16 @@ export default function StudentLoginPage() {
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-8 h-8 rounded-lg bg-blue-600/15 border border-blue-500/30 flex items-center justify-center">
-                <GraduationCap className="w-4 h-4 text-blue-400" />
+                <Shield className="w-4 h-4 text-blue-400" />
               </div>
               <span className="text-xs font-semibold text-blue-400 tracking-widest uppercase">
-                Student Portal
+                Unified Portal Login
               </span>
             </div>
             <h2 className="text-2xl font-bold text-white mb-1.5">Welcome back</h2>
-            <p className="text-gray-500 text-sm">Sign in to continue your prep journey</p>
+            <p className="text-gray-500 text-sm">
+              Sign in with your credentials — you&apos;ll be redirected to your portal automatically.
+            </p>
           </div>
 
           {error && (
@@ -143,11 +138,11 @@ export default function StudentLoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
-              <label htmlFor="student-email" className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <label htmlFor="login-email" className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Email
               </label>
               <input
-                id="student-email"
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -159,12 +154,12 @@ export default function StudentLoginPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label htmlFor="student-password" className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+              <label htmlFor="login-password" className="text-xs font-medium text-gray-400 uppercase tracking-wider">
                 Password
               </label>
               <div className="relative">
                 <input
-                  id="student-password"
+                  id="login-password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -201,20 +196,10 @@ export default function StudentLoginPage() {
 
           <div className="mt-8 pt-6 border-t border-white/5">
             <p className="text-center text-xs text-gray-600">
-              Access restricted to NST students only.
+              Access restricted to NST members only.
               <br />
               Contact your admin if you cannot log in.
             </p>
-          </div>
-
-          <div className="mt-6 flex justify-center gap-4 text-xs text-gray-700">
-            <a href={`${FACULTY_PORTAL_URL}/login`} className="hover:text-gray-500 transition-colors">
-              Faculty Portal
-            </a>
-            <span>·</span>
-            <a href={`${ADMIN_PORTAL_URL}/login`} className="hover:text-gray-500 transition-colors">
-              Admin Portal
-            </a>
           </div>
         </div>
       </div>
