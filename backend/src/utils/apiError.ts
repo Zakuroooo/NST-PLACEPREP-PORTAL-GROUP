@@ -66,7 +66,8 @@ export function handleApiError(error: unknown): NextResponse {
     );
   }
 
-  // Unexpected errors — don't leak internals
+  // Unexpected errors — don't leak internals to client, but DO log to Vercel
+  console.error('[UNHANDLED_API_ERROR]', error);
   const isDev = process.env.NODE_ENV !== 'production';
   return NextResponse.json(
     {
