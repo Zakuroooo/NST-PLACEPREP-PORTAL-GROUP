@@ -34,6 +34,8 @@ export interface IStudentProfile extends Document {
   targetCompanySlugs: string[];
   prepWeeksCommitted: number;
   onboardingCompletedAt?: Date;
+  questionsCompletedCount?: number;
+  doubtsRaisedCount?: number;
   isSeeded?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -98,6 +100,8 @@ const StudentProfileSchema = new Schema<IStudentProfile>(
     targetCompanySlugs: { type: [String], default: [] },
     prepWeeksCommitted: { type: Number, default: 12 },
     onboardingCompletedAt: { type: Date },
+    questionsCompletedCount: { type: Number, default: 0 },
+    doubtsRaisedCount: { type: Number, default: 0 },
     isSeeded: { type: Boolean, default: false },
   },
   {
