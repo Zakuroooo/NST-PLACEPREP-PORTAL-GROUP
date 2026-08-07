@@ -2,20 +2,16 @@ import type { NextConfig } from "next";
 
 /**
  * Admin Portal Next.js config.
- * - basePath: '/admin' — all routes served under /admin prefix.
- *   This pairs with the student-portal rewrite rule that proxies /admin/* here.
  * - externalDir: required to import from placeprep-backend (monorepo sibling)
  *
- * In production on Vercel, this app is deployed standalone but accessed via
- * the main student portal domain at /admin/*.
+ * LOCAL DEV: Runs on port 3002. Routes served at root path (/).
+ * PRODUCTION: Proxied by student portal rewrites at /admin/*.
+ *   The rewrite strips /admin from the path, so admin portal still
+ *   serves its own routes at root — no basePath needed.
  */
 
 const nextConfig: NextConfig = {
-  basePath: "/admin",
   transpilePackages: ["placeprep-backend"],
-  async rewrites() {
-    return [];
-  },
 };
 
 export default nextConfig;

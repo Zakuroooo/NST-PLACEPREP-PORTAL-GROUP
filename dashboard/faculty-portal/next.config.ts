@@ -2,20 +2,16 @@ import type { NextConfig } from "next";
 
 /**
  * Faculty Portal Next.js config.
- * - basePath: '/faculty' — all routes served under /faculty prefix.
- *   This pairs with the student-portal rewrite rule that proxies /faculty/* here.
  * - externalDir: required to import from placeprep-backend (monorepo sibling)
  *
- * In production on Vercel, this app is deployed standalone but accessed via
- * the main student portal domain at /faculty/*.
+ * LOCAL DEV: Runs on port 3001. Routes served at root path (/).
+ * PRODUCTION: Proxied by student portal rewrites at /faculty/*.
+ *   The rewrite strips /faculty from the path, so faculty portal still
+ *   serves its own routes at root — no basePath needed.
  */
 
 const nextConfig: NextConfig = {
-  basePath: "/faculty",
   transpilePackages: ["placeprep-backend"],
-  async rewrites() {
-    return [];
-  },
 };
 
 export default nextConfig;

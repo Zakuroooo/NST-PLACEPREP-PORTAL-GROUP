@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { jwtVerify } from 'jose';
 
-const PUBLIC_PATHS = ['/api/auth'];
+const PUBLIC_PATHS = ['/api/auth', '/auth/callback'];
 
 // Central login page — hosted on student portal
 const UNIFIED_LOGIN_URL =

@@ -30,15 +30,17 @@ export default function UnifiedLoginPage() {
         return;
       }
 
-      const { role, redirectUrl } = data.data;
+      const { role, redirectUrl, token } = data.data;
 
-      // Redirect based on role — backend determines the correct portal URL
       if (role === "student") {
-        // Student stays on same origin — use client-side navigation
+        // Student cookie already set on this origin — go directly to dashboard
         window.location.href = `${redirectUrl}/dashboard`;
       } else {
-        // Faculty and Admin are cross-origin portals — hard redirect
-        window.location.href = redirectUrl;
+        // Faculty/Admin: portals run on a different port/domain.
+        // Cookies don't cross origins, so we pass the token via URL param.
+        // The target portal's /auth/callback route sets the cookie and redirects.
+        const callbackUrl = `${redirectUrl}/auth/callback?token=${encodeURIComponent(token)}&role=${role}`;
+        window.location.href = callbackUrl;
       }
     } catch {
       setError("Unable to connect. Please check your internet connection.");

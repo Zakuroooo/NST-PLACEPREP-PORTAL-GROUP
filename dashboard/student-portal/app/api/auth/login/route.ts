@@ -75,6 +75,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         userId: result.userId,
         name: result.name,
         redirectUrl: result.redirectUrl,
+        token: result.token, // Needed for cross-origin portal cookie handoff
       },
       { message: 'Login successful' }
     );

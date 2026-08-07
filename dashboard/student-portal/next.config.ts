@@ -21,23 +21,24 @@ const nextConfig: NextConfig = {
   transpilePackages: ["placeprep-backend"],
   async rewrites() {
     return [
-      // Proxy /faculty and all sub-paths to the Faculty Portal
+      // Proxy /faculty/* to the Faculty Portal, stripping the /faculty prefix.
+      // Faculty portal serves routes at its own root path (e.g. /dashboard).
       {
         source: "/faculty",
-        destination: `${FACULTY_URL}/faculty`,
+        destination: `${FACULTY_URL}/`,
       },
       {
         source: "/faculty/:path*",
-        destination: `${FACULTY_URL}/faculty/:path*`,
+        destination: `${FACULTY_URL}/:path*`,
       },
-      // Proxy /admin and all sub-paths to the Admin Portal
+      // Proxy /admin/* to the Admin Portal, stripping the /admin prefix.
       {
         source: "/admin",
-        destination: `${ADMIN_URL}/admin`,
+        destination: `${ADMIN_URL}/`,
       },
       {
         source: "/admin/:path*",
-        destination: `${ADMIN_URL}/admin/:path*`,
+        destination: `${ADMIN_URL}/:path*`,
       },
     ];
   },
