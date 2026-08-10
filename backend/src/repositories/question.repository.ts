@@ -16,6 +16,7 @@ export const questionRepository = {
     isMcq?: boolean;
     minFrequency?: number;  // BUG-R4 FIX: frequency threshold filter
     targetRole?: string;    // Phase 2: filter by role (array-contains match on targetRoles[])
+    excludeIds?: string[];  // exclude already-assigned question IDs (prevents cross-week duplicates)
     page?: number;
     limit?: number;
   }): Promise<{ questions: IQuestion[]; total: number }> {
@@ -38,6 +39,9 @@ export const questionRepository = {
     // are excluded from roadmap weeks (e.g. minFrequency: 0.4 for 6-week plans)
     if (filter.minFrequency !== undefined) {
       query.frequencyScore = { $gte: filter.minFrequency };
+    }
+    if (filter.excludeIds?.length) {
+      query._id = { $nin: filter.excludeIds.map(id => new mongoose.Types.ObjectId(id)) };
     }
 
     const page = filter.page || 1;

@@ -74,7 +74,13 @@ export const roadmapService = {
       topicNames.push(DEFAULT_TOPICS[topicNames.length % DEFAULT_TOPICS.length]);
     }
 
-    const weeks = await Promise.all(topicNames.map(async (topicName, i) => {
+    // Sequential (not parallel) so each week can exclude IDs already assigned to prior weeks.
+    // Questions with multiple topics would otherwise appear in more than one week.
+    const usedIds = new Set<string>();
+    const weeks: RoadmapWeekDraft[] = [];
+
+    for (let i = 0; i < topicNames.length; i++) {
+      const topicName = topicNames[i];
       const topicMeta = topTopics[i];
       let questionIds: mongoose.Types.ObjectId[] = [];
       const breakdown = { dsa: 0, aptitude: 0, coreCs: 0, hr: 0 };
@@ -83,9 +89,11 @@ export const roadmapService = {
         const { questions } = await questionRepository.findMany({
           companySlug,
           topic: topicName,
+          excludeIds: [...usedIds],
           limit: questionsPerWeek,
         });
         questionIds = questions.map(q => q._id as mongoose.Types.ObjectId);
+        questionIds.forEach(id => usedIds.add(id.toString()));
 
         questions.forEach(q => {
           const qt = (q as any).questionType ?? 'dsa';
@@ -102,7 +110,7 @@ export const roadmapService = {
         ? questionIds.length
         : Math.min(Math.max(topicMeta?.questionCount ?? 5, 1), questionsPerWeek);
 
-      return {
+      weeks.push({
         weekNumber: i + 1,
         topicLabel: topicName,
         totalQuestions,
@@ -112,8 +120,8 @@ export const roadmapService = {
         rationaleScore: topicMeta?.rationaleScore ?? 0,
         questionBreakdown: breakdown,
         poolSource: 'company' as const,
-      };
-    }));
+      });
+    }
 
     // Append generic-pool weeks for non-Coding rounds in the company's roundStructure.
     // Each round type maps to a null-slug pool (aptitude_mcq, system_design, etc.).
