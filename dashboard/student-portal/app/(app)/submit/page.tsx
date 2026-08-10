@@ -7,6 +7,7 @@ import { Zap, Plus, X, CheckCircle, Clock, XCircle, Check,
   ChevronRight, ChevronDown, ChevronUp, ThumbsUp,
   History, Code, Sparkles, Filter, ArrowUpDown, Star, Layers
 } from "lucide-react";
+import { mutate as globalMutate } from 'swr'; // BUG-FIX E1: live XP badge + SWR cache sync
 import { useNavbar } from "@/lib/navbar-context";
 import { useCompanies } from "@/lib/hooks";
 
@@ -152,6 +153,7 @@ function SubmitContent() {
   // Modal state
   const [showModal, setShowModal] = useState(false);
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [xpAwarded, setXpAwarded] = useState<number>(50); // BUG-FIX E1: real XP from server response
 
   // Filters state
   const [filterDifficulty, setFilterDifficulty] = useState<string>("All");
@@ -402,6 +404,11 @@ function SubmitContent() {
             exp.id === optimisticId ? { ...exp, id: saved._id } : exp
           ));
         }
+        // BUG-FIX E1: read real XP amount from server response
+        if (saved?.xpAwarded) setXpAwarded(saved.xpAwarded);
+        // BUG-FIX E1: update navbar XP badge immediately + sync shared experiences cache
+        await globalMutate('/api/user/me');
+        await globalMutate('/api/experiences');
       }
     } catch {
       // Keep optimistic entry even on network failure
@@ -737,7 +744,7 @@ function SubmitContent() {
                   <h3 className="text-2xl font-bold text-gray-900 mb-2">Thank you for contributing!</h3>
                   <div className="inline-flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-6 py-3 text-amber-800 font-bold text-lg mt-4 mb-4 shadow-sm">
                     <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
-                    +50 XP Earned!
+                    +{xpAwarded ?? 50} XP Earned! {/* BUG-FIX E1: was hardcoded 50 */}
                   </div>
                   <p className="text-gray-500 text-sm">Your experience will help future NST students prepare better.</p>
                   <div className="flex justify-center gap-3 mt-8">

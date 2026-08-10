@@ -1,7 +1,12 @@
 /**
  * dashboard/student-portal/app/api/experiences/route.ts
- * GET  /api/experiences — browse verified experiences, filter by company
+ * GET  /api/experiences — browse verified experiences + own unverified submissions
  * POST /api/experiences — submit a new experience
+ *
+ * BUG-FIX E1 (GET): own unverified submissions are now included so the student
+ * always sees their own entry (before and after admin verification).
+ * BUG-FIX E1 (POST): response includes xpAwarded so the frontend can show a
+ * dynamic amount instead of a hardcoded "+50 XP".
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -25,12 +30,28 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const page = Number(searchParams.get('page')) || 1;
     const limit = Math.min(Number(searchParams.get('limit')) || 10, 20);
 
-    const { experiences, total } = await experienceRepository.findAll({
+    // Public verified feed
+    const { experiences: publicFeed, total: publicTotal } = await experienceRepository.findAll({
       companySlug,
       verified: true,
-      page,
-      limit,
+      page: 1,         // fetch full first page for deduplication
+      limit: limit + 20, // fetch a bit more to account for deduplication
     });
+
+    // BUG-FIX E1: fetch own submissions (verified or not) so the student always sees their own
+    const ownExperiences = await experienceRepository.findByStudentId(user.userId);
+
+    // Merge: own first, then public — dedupe by _id (own takes precedence)
+    const ownIds = new Set(ownExperiences.map((e: any) => String(e._id)));
+    const deduped = [
+      ...ownExperiences,
+      ...publicFeed.filter((e: any) => !ownIds.has(String(e._id))),
+    ];
+
+    // Apply pagination to the merged list
+    const total = publicTotal + ownExperiences.filter((e: any) => !e.isVerified).length;
+    const start = (page - 1) * limit;
+    const experiences = deduped.slice(start, start + limit);
 
     return successResponse(experiences, { meta: { page, limit, total } });
   } catch (error) {
@@ -72,18 +93,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       source: 'nst_internal',
     });
 
-    // BUG-EX1 FIX: Award 50 XP for submitting an experience
-    // Previously the success modal showed '+50 XP Earned!' but this was never actually called
+    const XP_AWARDED = 50;
+    // BUG-EX1 FIX: Award XP for submitting an experience
     try {
-      await studentRepository.addXp(user.userId, 50);
+      await studentRepository.addXp(user.userId, XP_AWARDED);
     } catch {
       // Don't fail the request if XP award fails — experience was already created
     }
 
-    return successResponse(experience, {
-      status: 201,
-      message: 'Experience submitted! +50 XP awarded. It will appear after admin verification.',
-    });
+    // BUG-FIX E1: include xpAwarded in response so frontend can show real amount
+    return NextResponse.json(
+      {
+        success: true,
+        data: { ...(experience as any).toObject?.() ?? experience, xpAwarded: XP_AWARDED },
+        message: `Experience submitted! +${XP_AWARDED} XP awarded. It will appear after admin verification.`,
+      },
+      { status: 201 }
+    );
   } catch (error) {
     return handleApiError(error);
   }

@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react"; // BUG-FIX C1: useEffect still needed for faculty fetch in BookingDrawer
 import {
   CalendarDays, Clock, CheckCircle2, XCircle, AlertCircle,
   Video, ChevronLeft, ChevronRight, X, Send, User,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useSessions, updateSessionStatus } from "@/lib/hooks"; // BUG-FIX C1: use SWR hook
 
 type SessionStatus = "pending" | "confirmed" | "proposed" | "completed" | "cancelled";
 
@@ -14,7 +15,7 @@ interface Session {
   notes: string;
   date: string;
   time: string;
-  duration: 30 | 60;
+  duration: number; // BUG-FIX C2: was 30 | 60 — now any valid integer 15–120
   status: SessionStatus;
   facultyName: string;
   meetLink?: string;
@@ -22,17 +23,7 @@ interface Session {
   proposedTime?: string;
 }
 
-const TIME_SLOTS = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00"];
-const TIME_LABELS: Record<string, string> = {
-  "09:00": "9:00 AM", "10:00": "10:00 AM", "11:00": "11:00 AM", "12:00": "12:00 PM",
-  "14:00": "2:00 PM", "15:00": "3:00 PM", "16:00": "4:00 PM", "17:00": "5:00 PM",
-};
-
 interface FacultyOption { id: string; name: string; subject: string; }
-
-
-
-
 
 const DAYS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -50,6 +41,18 @@ function daysUntil(dateStr: string) {
   if (diff === 0) return "Today";
   if (diff === 1) return "Tomorrow";
   return `In ${diff} days`;
+}
+
+// helper: normalize any time string to HH:mm
+function to24h(t: string): string {
+  if (/^\d{2}:\d{2}$/.test(t)) return t; // already HH:mm (native time input emits this)
+  const m = t.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
+  if (!m) return "09:00";
+  let h = parseInt(m[1], 10);
+  const min = m[2];
+  if (m[3].toUpperCase() === "PM" && h !== 12) h += 12;
+  if (m[3].toUpperCase() === "AM" && h === 12) h = 0;
+  return `${String(h).padStart(2, "0")}:${min}`;
 }
 
 const STATUS_CFG: Record<SessionStatus, { label: string; cls: string; icon: React.ElementType }> = {
@@ -75,7 +78,6 @@ function MiniCalendar({ onSelect, selected }: { onSelect: (d: string) => void; s
 
   const isAvail = (day: number) => {
     const d = new Date(viewYear, viewMonth, day);
-    // All future dates (including today) are bookable — no day-of-week restriction
     return d >= today;
   };
 
@@ -84,7 +86,6 @@ function MiniCalendar({ onSelect, selected }: { onSelect: (d: string) => void; s
 
   return (
     <div className="bg-white border border-gray-200 rounded">
-      {/* Month nav */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
         <button onClick={prevMonth} className="p-1 hover:bg-gray-100 rounded text-gray-400">
           <ChevronLeft className="w-4 h-4" />
@@ -95,14 +96,12 @@ function MiniCalendar({ onSelect, selected }: { onSelect: (d: string) => void; s
         </button>
       </div>
 
-      {/* Day headers */}
       <div className="grid grid-cols-7 px-3 pt-2">
         {DAYS.map((d) => (
           <div key={d} className="text-center text-[10px] font-semibold text-gray-400 py-1">{d}</div>
         ))}
       </div>
 
-      {/* Date grid */}
       <div className="grid grid-cols-7 gap-0.5 px-3 pb-3">
         {Array.from({ length: firstDay }).map((_, i) => <div key={`e${i}`} />)}
         {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
@@ -127,7 +126,6 @@ function MiniCalendar({ onSelect, selected }: { onSelect: (d: string) => void; s
         })}
       </div>
 
-      {/* Legend */}
       <div className="flex items-center gap-4 px-4 py-2.5 border-t border-gray-100 text-[10px] text-gray-400">
         <span className="flex items-center gap-1">
           <span className="w-2.5 h-2.5 rounded-sm bg-blue-50 border border-blue-200 inline-block" />
@@ -142,31 +140,21 @@ function MiniCalendar({ onSelect, selected }: { onSelect: (d: string) => void; s
   );
 }
 
-// helper: convert "9:00 AM" legacy or already "HH:mm" to "HH:mm"
-function to24h(t: string): string {
-  if (/^\d{2}:\d{2}$/.test(t)) return t; // already HH:mm
-  const m = t.match(/^(\d+):(\d+)\s*(AM|PM)$/i);
-  if (!m) return "09:00";
-  let h = parseInt(m[1], 10);
-  const min = m[2];
-  if (m[3].toUpperCase() === "PM" && h !== 12) h += 12;
-  if (m[3].toUpperCase() === "AM" && h === 12) h = 0;
-  return `${String(h).padStart(2, "0")}:${min}`;
-}
-
 // ── Booking Drawer ────────────────────────────────────
+// BUG-FIX C2: onBook duration changed from 30 | 60 to number
 function BookingDrawer({ selectedDate, onClose, onBook }: {
   selectedDate: string;
   onClose: () => void;
-  onBook: (data: { topic: string; notes: string; date: string; time: string; duration: 30 | 60; facultyId: string; facultyName: string }) => void;
+  onBook: (data: { topic: string; notes: string; date: string; time: string; duration: number; facultyId: string; facultyName: string }) => void;
 }) {
-  const [time, setTime] = useState(TIME_SLOTS[0]);
+  const [time, setTime] = useState("09:00"); // BUG-FIX C2: default for native time input
   const [topic, setTopic] = useState("");
   const [notes, setNotes] = useState("");
-  const [duration, setDuration] = useState<30 | 60>(30);
+  const [duration, setDuration] = useState<number>(30); // BUG-FIX C2: number not 30 | 60
   const [facultyList, setFacultyList] = useState<FacultyOption[]>([]);
   const [facultyId, setFacultyId] = useState("");
 
+  // Faculty list fetch — unchanged
   useEffect(() => {
     fetch("/api/messages/faculty", { credentials: "include" })
       .then((r) => r.json())
@@ -182,7 +170,8 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
       .catch(() => {});
   }, []);
 
-  const canBook = topic.trim().length >= 5 && facultyId.length > 0;
+  // BUG-FIX C2: canBook includes duration range validation
+  const canBook = topic.trim().length >= 5 && facultyId.length > 0 && duration >= 15 && duration <= 120;
 
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -216,36 +205,34 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
             )}
           </div>
 
-          {/* Time slots */}
+          {/* BUG-FIX C2: native time input replaces fixed TIME_SLOTS grid */}
           <div>
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Time Slot</label>
-            <div className="grid grid-cols-4 gap-1.5">
-              {TIME_SLOTS.map((t) => (
-                <button key={t} onClick={() => setTime(t)}
-                  className={`py-1.5 rounded text-xs font-semibold border ${
-                    time === t
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
-                  }`}
-                >{TIME_LABELS[t] ?? t}</button>
-              ))}
-            </div>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">Time</label>
+            <input
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              className="w-full text-sm border border-gray-200 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
           </div>
 
-          {/* Duration */}
+          {/* BUG-FIX C2: numeric duration input replaces 30/60 min toggle */}
           <div>
-            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 block">Duration</label>
-            <div className="flex gap-2">
-              {([30, 60] as const).map((d) => (
-                <button key={d} onClick={() => setDuration(d)}
-                  className={`flex-1 py-1.5 rounded text-sm font-semibold border ${
-                    duration === d
-                      ? "bg-blue-600 text-white border-blue-600"
-                      : "bg-white text-gray-600 border-gray-200 hover:border-blue-400"
-                  }`}
-                >{d} min</button>
-              ))}
-            </div>
+            <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5 block">
+              Duration (minutes) <span className="font-normal text-gray-400 normal-case">15–120</span>
+            </label>
+            <input
+              type="number"
+              min={15}
+              max={120}
+              step={5}
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              className="w-full text-sm border border-gray-200 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {(duration < 15 || duration > 120) && (
+              <p className="text-[11px] text-red-500 mt-1">Duration must be between 15 and 120 minutes</p>
+            )}
           </div>
 
           {/* Topic */}
@@ -292,7 +279,7 @@ function BookingDrawer({ selectedDate, onClose, onBook }: {
                 topic: topic.trim(),
                 notes: notes.trim(),
                 date: selectedDate,
-                time: to24h(time),
+                time: to24h(time), // native time input already emits HH:mm; to24h is a no-op here
                 duration,
                 facultyId,
                 facultyName: selectedFaculty?.name ?? "Faculty",
@@ -378,44 +365,49 @@ function SessionCard({ session, onAcceptProposal, onDecline }: { session: Sessio
 }
 
 export default function SessionsPage() {
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // BUG-FIX C1: removed useState<Session[]> and manual useEffect fetch
+  const [pendingSession, setPendingSession] = useState<Session | null>(null); // optimistic-only
   const [selectedDate, setSelectedDate] = useState("");
   const [showBooking, setShowBooking] = useState(false);
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
 
-  useEffect(() => {
-    setIsLoading(true);
-    import("@/lib/api").then(({ getSessions }) =>
-      getSessions().then((data) => {
-        const rawSessions = Array.isArray(data) ? data : (data as any).sessions ?? [];
-        const mapped: Session[] = rawSessions.map((s: any) => ({
-          id: s._id ?? s.id,
-          topic: s.topic,
-          notes: s.notes ?? "",
-          // Backend fields: requestedDate (YYYY-MM-DD), requestedTime (HH:mm)
-          date: s.requestedDate ?? s.scheduledAt?.split("T")[0] ?? "",
-          time: s.requestedTime ?? (s.scheduledAt ? new Date(s.scheduledAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }) : ""),
-          // Backend field: durationMin (not durationMins)
-          duration: (s.durationMin ?? s.durationMins ?? 30) as 30 | 60,
-          status: (s.status === "declined" ? "cancelled" : s.status) as SessionStatus,
-          facultyName: typeof s.facultyId === "object" ? s.facultyId?.fullName ?? "Faculty" : "Faculty",
-          meetLink: s.meetLink,
-          // Backend field: proposedDate + proposedTime (not proposedAlternativeAt)
-          proposedDate: s.proposedDate ?? s.proposedAlternativeAt?.split("T")[0],
-          proposedTime: s.proposedTime ?? (s.proposedAlternativeAt
-            ? new Date(s.proposedAlternativeAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
-            : undefined),
-        }));
-        if (mapped.length > 0) setSessions(mapped);
-        setIsLoading(false);
-      }).catch(() => { setIsLoading(false); })
-    ).catch(() => { setIsLoading(false); });
-  }, []);
+  // BUG-FIX C1: use SWR hook — revalidateOnFocus + refreshInterval:15s (set in hooks.ts)
+  const { data: rawSessionsData, isLoading, mutate: mutateSessions } = useSessions();
 
-  const handleBook = async (data: { topic: string; notes: string; date: string; time: string; duration: 30 | 60; facultyId: string; facultyName: string }) => {
+  // BUG-FIX C1: derive sessions from SWR data via useMemo
+  const sessions = useMemo<Session[]>(() => {
+    const arr = Array.isArray(rawSessionsData) ? rawSessionsData : [];
+    return arr.map((s: any) => ({
+      id: s._id ?? s.id,
+      topic: s.topic,
+      notes: s.notes ?? "",
+      date: s.requestedDate ?? s.scheduledAt?.split("T")[0] ?? "",
+      time: s.requestedTime ?? (s.scheduledAt
+        ? new Date(s.scheduledAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+        : ""),
+      duration: s.durationMin ?? s.durationMins ?? 30, // BUG-FIX C2: number
+      status: (s.status === "declined" ? "cancelled" : s.status) as SessionStatus,
+      facultyName: typeof s.facultyId === "object" ? s.facultyId?.fullName ?? "Faculty" : "Faculty",
+      meetLink: s.meetLink,
+      proposedDate: s.proposedDate ?? s.proposedAlternativeAt?.split("T")[0],
+      proposedTime: s.proposedTime ?? (s.proposedAlternativeAt
+        ? new Date(s.proposedAlternativeAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+        : undefined),
+    }));
+  }, [rawSessionsData]);
+
+  // Merge optimistic pending session with SWR sessions (for instant post-booking UX)
+  const displayedSessions = useMemo(() =>
+    pendingSession
+      ? [pendingSession, ...sessions.filter(s => s.id !== pendingSession.id)]
+      : sessions,
+    [sessions, pendingSession]
+  );
+
+  // BUG-FIX C1+C2: duration is now number; after API call mutate SWR instead of patching local state
+  const handleBook = async (data: { topic: string; notes: string; date: string; time: string; duration: number; facultyId: string; facultyName: string }) => {
     const optimisticId = `s${Date.now()}`;
-    const optimistic: Session = {
+    setPendingSession({
       id: optimisticId,
       topic: data.topic,
       notes: data.notes,
@@ -424,8 +416,7 @@ export default function SessionsPage() {
       duration: data.duration,
       status: "pending",
       facultyName: data.facultyName,
-    };
-    setSessions((prev) => [optimistic, ...prev]);
+    });
     try {
       const res = await fetch("/api/sessions", {
         method: "POST",
@@ -435,24 +426,16 @@ export default function SessionsPage() {
           facultyId: data.facultyId,
           topic: data.topic,
           notes: data.notes || undefined,
-          requestedDate: data.date,          // YYYY-MM-DD ✓
-          requestedTime: data.time,          // HH:mm ✓
-          durationMin: data.duration,        // 30 | 60 ✓
+          requestedDate: data.date,
+          requestedTime: data.time,
+          durationMin: data.duration, // BUG-FIX C2: now any integer 15–120
         }),
       });
       if (res.ok) {
-        const json = await res.json();
-        // BUG-A FIX: backend wraps booking under json.data.booking, not json.data directly
-        const booking = json.data?.booking ?? json.data;
-        setSessions((prev) => prev.map((x) => x.id === optimisticId ? {
-          ...x,
-          id: booking?._id ?? optimisticId,
-          status: "pending",
-        } : x));
         toast.success("Session request sent! Faculty will confirm shortly.");
+        await mutateSessions(); // BUG-FIX C1: re-fetch from DB via SWR
       } else {
         const errJson = await res.json().catch(() => ({}));
-        setSessions((prev) => prev.filter((x) => x.id !== optimisticId));
         const fieldErrors = errJson?.error?.details;
         const msg = fieldErrors
           ? Object.values(fieldErrors).flat().join(" ")
@@ -460,49 +443,38 @@ export default function SessionsPage() {
         toast.error(msg);
       }
     } catch {
-      setSessions((prev) => prev.filter((x) => x.id !== optimisticId));
       toast.error("Network error. Please try again.");
+    } finally {
+      setPendingSession(null); // clear optimistic — SWR data now authoritative
     }
   };
 
-
-  const handleAcceptProposal = (id: string) => {
-    import("@/lib/hooks").then(({ updateSessionStatus }) => {
-      // Optimistic update — do NOT generate fake meetLink client-side;
-      // the real link comes from the backend/faculty
-      setSessions((prev) => prev.map((s) => s.id === id ? {
-        ...s, status: "confirmed",
-        date: s.proposedDate ?? s.date, time: s.proposedTime ?? s.time,
-        // meetLink intentionally left as-is (undefined until faculty provides it)
-      } : s));
-      
-      updateSessionStatus(id, 'accept_proposal')
-        .then(() => toast.success("Session confirmed! Faculty will share the meet link."))
-        .catch((err) => {
-          toast.error(err?.message || "Failed to confirm session.");
-          // Revert on error
-          setSessions((prev) => prev.map((s) => s.id === id ? { ...s, status: "proposed" } : s));
-        });
-    });
+  // BUG-FIX C1: use SWR mutate after API resolves instead of setSessions
+  const handleAcceptProposal = async (id: string) => {
+    try {
+      await updateSessionStatus(id, 'accept_proposal');
+      toast.success("Session confirmed! Faculty will share the meet link.");
+      await mutateSessions(); // BUG-FIX C1: SWR re-fetch updates the card state
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to confirm session.");
+      await mutateSessions(); // revert to actual DB state on error
+    }
   };
 
-  // BUG-17 FIX: Decline proposal handler — cancels the proposed slot via API
-  const handleDeclineProposal = (id: string) => {
-    import("@/lib/hooks").then(({ updateSessionStatus }) => {
-      // Optimistic update — move to cancelled
-      setSessions((prev) => prev.map((s) => s.id === id ? { ...s, status: "cancelled" } : s));
-      updateSessionStatus(id, 'cancel')
-        .then(() => toast.success("Proposal declined."))
-        .catch((err) => {
-          toast.error(err?.message || "Failed to decline proposal.");
-          // Revert on error
-          setSessions((prev) => prev.map((s) => s.id === id ? { ...s, status: "proposed" } : s));
-        });
-    });
+  // BUG-FIX C1: use SWR mutate after API resolves instead of setSessions
+  const handleDeclineProposal = async (id: string) => {
+    try {
+      await updateSessionStatus(id, 'cancel');
+      toast.success("Proposal declined.");
+      await mutateSessions(); // BUG-FIX C1: SWR re-fetch
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to decline proposal.");
+      await mutateSessions();
+    }
   };
 
-  const upcoming = sessions.filter((s) => ["pending", "confirmed", "proposed"].includes(s.status));
-  const past = sessions.filter((s) => ["completed", "cancelled"].includes(s.status));
+  const upcoming = displayedSessions.filter((s) => ["pending", "confirmed", "proposed"].includes(s.status));
+  const past = displayedSessions.filter((s) => ["completed", "cancelled"].includes(s.status));
 
   if (isLoading) {
     return (
@@ -554,7 +526,7 @@ export default function SessionsPage() {
                 <CalendarDays className="w-4 h-4 text-blue-600" /> How it works
               </p>
               <p className="flex items-start gap-2"><span className="font-bold text-blue-300">1.</span> Pick any available date on the calendar</p>
-              <p className="flex items-start gap-2"><span className="font-bold text-blue-300">2.</span> Choose a time slot and session topic</p>
+              <p className="flex items-start gap-2"><span className="font-bold text-blue-300">2.</span> Choose a time and session topic</p>
               <p className="flex items-start gap-2"><span className="font-bold text-blue-300">3.</span> Faculty confirms or proposes a new time</p>
               <p className="flex items-start gap-2"><span className="font-bold text-blue-300">4.</span> Join via the auto-generated Jitsi Meet link</p>
             </div>
@@ -563,7 +535,6 @@ export default function SessionsPage() {
 
         {/* Middle: Sessions List */}
         <div>
-          {/* Tab switcher */}
           <div className="flex items-center gap-0 border border-gray-200 rounded-lg overflow-hidden mb-5 w-fit bg-white shadow-sm p-1">
             {(["upcoming", "past"] as const).map((t) => (
               <button key={t} onClick={() => setTab(t)}
@@ -595,9 +566,8 @@ export default function SessionsPage() {
         {/* Right: Info Card */}
         <div>
           <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-xl p-4 text-white shadow-md relative overflow-hidden">
-            {/* Background decorations */}
             <div className="absolute top-0 right-0 -mr-4 -mt-4 w-24 h-24 rounded-full bg-white/10 blur-xl"></div>
-            
+
             <div className="relative z-10">
               <div className="flex items-center gap-3 mb-3">
                 <div className="bg-white/20 w-8 h-8 rounded-lg flex items-center justify-center backdrop-blur-sm border border-white/10 shrink-0">
@@ -608,19 +578,19 @@ export default function SessionsPage() {
                   <p className="text-blue-100 text-[10px]">Book a 1:1 mentor session</p>
                 </div>
               </div>
-              
+
               <ul className="space-y-1.5 mb-4">
                 <li className="flex items-center gap-2 text-[11px] font-medium text-white/90">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-200 shrink-0" /> Resume Review & Polish
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-200 shrink-0" /> Resume Review &amp; Polish
                 </li>
                 <li className="flex items-center gap-2 text-[11px] font-medium text-white/90">
                   <CheckCircle2 className="w-3.5 h-3.5 text-blue-200 shrink-0" /> Mock Interviews (DSA/HR)
                 </li>
                 <li className="flex items-center gap-2 text-[11px] font-medium text-white/90">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-200 shrink-0" /> System Design & LLD
+                  <CheckCircle2 className="w-3.5 h-3.5 text-blue-200 shrink-0" /> System Design &amp; LLD
                 </li>
               </ul>
-              
+
               <div className="bg-white/10 rounded-lg p-2.5 backdrop-blur-sm border border-white/10 text-[9px] leading-tight text-blue-50">
                 Sessions are subject to faculty availability. Please book at least 24 hours in advance.
               </div>

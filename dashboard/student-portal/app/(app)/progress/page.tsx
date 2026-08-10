@@ -1,5 +1,6 @@
 "use client";
 import { useMemo } from "react";
+import Link from "next/link"; // BUG-FIX D1: for clickable company name links
 import { useRouter } from "next/navigation";
 import { TrendingUp, Flame, Trophy, Zap, AlertCircle } from "lucide-react";
 import { useProgress, useDashboard, useRoadmap } from "@/lib/hooks";
@@ -230,7 +231,13 @@ export default function ProgressPage() {
                         className="w-7 h-7 rounded shrink-0 object-contain bg-white border border-gray-100 p-0.5"
                         onError={(e) => { (e.target as HTMLImageElement).src = "https://www.google.com/s2/favicons?sz=64&domain=example.com"; }}
                       />
-                      <span className="font-medium text-gray-900">{co.name}</span>
+                      {/* BUG-FIX D1: wrap company name in Link to its practice page */}
+                      <Link
+                        href={`/companies/${co.slug}/practice`}
+                        className="font-medium text-gray-900 cursor-pointer hover:text-blue-600 hover:underline transition-colors"
+                      >
+                        {co.name}
+                      </Link>
                     </div>
                   </td>
                   <td className="px-5 py-4 text-gray-500">{co.role}</td>

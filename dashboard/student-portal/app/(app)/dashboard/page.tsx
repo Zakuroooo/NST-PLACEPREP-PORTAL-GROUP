@@ -3,11 +3,11 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
-  Activity, Trophy, CheckSquare, Square, ExternalLink,
+  Activity, Trophy, ExternalLink,
   Clock, TrendingUp, ChevronRight, Zap
 } from "lucide-react";
 import { toast } from "sonner";
-import useSWR from "swr";
+import useSWR, { mutate as globalMutate } from "swr"; // BUG-FIX A2: import globalMutate for XP badge sync
 
 // BUG-T4 FIX: Import completeQuestion mutation
 import { useDashboard, completeQuestion } from "@/lib/hooks";
@@ -302,6 +302,7 @@ export default function DashboardPage() {
                             if (!res.ok) throw new Error('Failed to unmark');
                             setChecked((c) => ({ ...c, [q.id]: false }));
                             await mutateCompleted();
+                            await globalMutate('/api/user/me'); // BUG-FIX A2: update navbar XP badge on uncheck
                             toast(`-${q.xp} XP removed`, { duration: 2000 });
                           }
                         } catch (err: any) {
@@ -313,13 +314,7 @@ export default function DashboardPage() {
                         }
                       }}
                     >
-                      <button className="shrink-0" aria-label={checked[q.id] ? "Mark incomplete" : "Mark complete"}>
-                        {checked[q.id] ? (
-                          <CheckSquare className="w-5 h-5 text-blue-600" />
-                        ) : (
-                          <Square className="w-5 h-5 text-gray-300" />
-                        )}
-                      </button>
+                      {/* BUG-FIX A4: removed checkbox button — row onClick + strike-through span are the completion UI */}
                       <span className={`flex-1 text-sm ${checked[q.id] ? "line-through text-gray-400" : "text-gray-900 font-medium"}`}>
                         {q.title}
                       </span>
