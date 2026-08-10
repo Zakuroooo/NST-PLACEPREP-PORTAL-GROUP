@@ -26,13 +26,15 @@ export default function Step4() {
       const targetCompanySlugs = JSON.parse(sessionStorage.getItem("onboarding_companies") || '["google", "amazon"]');
       const topicSelfRatings = JSON.parse(sessionStorage.getItem("onboarding_ratings") || "{}");
       const prepWeeksCommitted = parseInt(sessionStorage.getItem("onboarding_weeks") || "12", 10);
+      const targetRole = sessionStorage.getItem("onboarding_target_role") || "SDE-1";
 
-      await submitOnboarding({
+      const result = await submitOnboarding({ // BUG-FIX F2
         targetDomains,
         targetCategories,
         topicSelfRatings,
         targetCompanySlugs: targetCompanySlugs.length ? targetCompanySlugs : ["google"], // Fallback if empty
         prepWeeksCommitted,
+        targetRole,
       });
 
       // Clear session storage to prevent stale data
@@ -41,13 +43,14 @@ export default function Step4() {
       sessionStorage.removeItem("onboarding_companies");
       sessionStorage.removeItem("onboarding_ratings");
       sessionStorage.removeItem("onboarding_weeks");
+      sessionStorage.removeItem("onboarding_target_role");
       
       // Force cache invalidation so the new profile loads
       const { mutate } = await import('swr');
       await mutate('/api/user/me');
 
       sessionStorage.setItem("has_onboarded", "true");
-      toast.success("Roadmap created! Welcome to PlacePrep.");
+      toast.success(`Roadmap created! +${(result as any)?.xpAwarded ?? 100} XP earned. Welcome to PlacePrep.`); // BUG-FIX F2
     } catch (err: any) {
       // Non-blocking — still proceed to dashboard so user isn't stuck
       toast.error(err?.message ?? "Could not save profile. You can update it later.");

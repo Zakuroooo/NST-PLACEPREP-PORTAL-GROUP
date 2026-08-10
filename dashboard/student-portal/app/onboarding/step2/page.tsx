@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import {
   Building2, Briefcase, Server, Rocket, Landmark, MoreHorizontal, CheckCircle,
 } from "lucide-react";
@@ -18,6 +19,7 @@ const categories: { id: CompanyCategory; icon: React.ComponentType<{ className?:
 
 export default function Step2() {
   const [selected, setSelected] = useState<CompanyCategory[]>([]);
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const toggle = (id: CompanyCategory) => {
@@ -87,25 +89,39 @@ export default function Step2() {
               ← Back
             </button>
             <button
-              onClick={() => {
-                if (typeof window !== "undefined") {
-                  sessionStorage.setItem("onboarding_categories", JSON.stringify(selected));
-                  const categoryToSlugs: Record<string, string[]> = {
-                    maang:   ["google", "amazon", "microsoft"],
-                    product: ["flipkart", "razorpay"],
-                    service: ["tcs"],
-                    startup: ["razorpay"],
-                    bfsi:    [],
-                    other:   [],
-                  };
-                  const slugs = [...new Set(selected.flatMap((cat) => categoryToSlugs[cat] ?? []))];
-                  sessionStorage.setItem("onboarding_companies", JSON.stringify(slugs));
+              disabled={loading}
+              onClick={async () => {
+                if (typeof window === "undefined") return;
+                sessionStorage.setItem("onboarding_categories", JSON.stringify(selected));
+                setLoading(true);
+                try {
+                  // Fetch real company slugs for each selected category from the DB
+                  const results = await Promise.all(
+                    selected.map((cat) =>
+                      fetch(`/api/companies?category=${cat}`)
+                        .then((r) => r.json())
+                        .then((d) => (Array.isArray(d.data) ? d.data : []) as Array<{ slug: string }>)
+                        .catch(() => [] as Array<{ slug: string }>)
+                    )
+                  );
+                  const seen = new Set<string>();
+                  const slugs: string[] = [];
+                  for (const arr of results) {
+                    for (const c of arr) {
+                      if (!seen.has(c.slug)) { seen.add(c.slug); slugs.push(c.slug); }
+                    }
+                  }
+                  sessionStorage.setItem("onboarding_companies", JSON.stringify(slugs.slice(0, 6)));
+                } catch {
+                  sessionStorage.setItem("onboarding_companies", JSON.stringify([]));
+                } finally {
+                  setLoading(false);
+                  router.push("/onboarding/step3");
                 }
-                router.push("/onboarding/step3");
               }}
-              className="flex-1 bg-gray-900 text-white py-3 rounded-lg text-sm font-semibold hover:bg-gray-800 transition-colors"
+              className="flex-1 bg-gray-900 text-white py-3 rounded-lg text-sm font-semibold hover:bg-gray-800 transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
             >
-              Continue →
+              {loading ? <><Loader2 className="w-4 h-4 animate-spin" /> Loading...</> : "Continue →"}
             </button>
           </div>
         </div>

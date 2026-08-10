@@ -3,6 +3,14 @@ import { useState, useEffect } from "react";
 import { X, Calendar, CheckCircle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { addRoadmapCompany } from "@/lib/hooks";
+import { TARGET_ROLES } from "placeprep-backend/src/constants/roles";
+
+interface ApiTopic {
+  topicSlug: string;
+  topicName: string;
+  frequencyPct: number;
+  questionCount: number;
+}
 
 const WEEK_OPTIONS = [4, 8, 12, 16, 24];
 
@@ -24,10 +32,36 @@ export default function AddToRoadmapModal({ company, onClose, onAdded }: Props) 
   const [added, setAdded] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [topics, setTopics] = useState<ApiTopic[]>([]);
+  const [loadingTopics, setLoadingTopics] = useState(false);
+  const [ratings, setRatings] = useState<Record<string, number>>({});
+
+  // Fetch role-specific topics whenever role or company changes
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
+    if (!company) return;
+    let cancelled = false;
+    setLoadingTopics(true);
+    fetch(`/api/companies/${company.slug}/topics?role=${encodeURIComponent(role)}`, {
+      credentials: "include",
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const fetched: ApiTopic[] = Array.isArray(d.data) ? d.data : [];
+        setTopics(fetched);
+        setRatings((prev) => {
+          const next: Record<string, number> = {};
+          fetched.forEach((t) => { next[t.topicSlug] = prev[t.topicSlug] ?? 5; });
+          return next;
+        });
+      })
+      .catch(() => { if (!cancelled) setTopics([]); })
+      .finally(() => { if (!cancelled) setLoadingTopics(false); });
+    return () => { cancelled = true; };
+  }, [role, company]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
@@ -42,6 +76,7 @@ export default function AddToRoadmapModal({ company, onClose, onAdded }: Props) 
         companySlug: company.slug,
         targetRole: role,
         preparationWeeks: weeks,
+        topicSelfRatings: Object.keys(ratings).length > 0 ? ratings : undefined,
       });
       setAdded(true);
       toast.success(`${company.name} added to your roadmap!`);
@@ -102,10 +137,11 @@ export default function AddToRoadmapModal({ company, onClose, onAdded }: Props) 
               </div>
 
               <h2 className="text-base font-bold text-gray-900 mb-1">Add to My Roadmap</h2>
-              <p className="text-sm text-gray-500 mb-5">
-                How many weeks do you want to commit to preparing for {company.name}?
+              <p className="text-sm text-gray-500 mb-4">
+                Rate your confidence so we can prioritise the right topics first.
               </p>
 
+              {/* Role selector */}
               <div className="mb-4">
                 <label className="text-xs font-semibold text-gray-600 mb-2 block">Target Role</label>
                 <select
@@ -113,12 +149,53 @@ export default function AddToRoadmapModal({ company, onClose, onAdded }: Props) 
                   onChange={(e) => setRole(e.target.value)}
                   className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
                 >
-                  {["SDE-1", "SDE-2", "Data Analyst", "Product Manager", "DevOps"].map((r) => (
+                  {TARGET_ROLES.map((r) => (
                     <option key={r} value={r}>{r}</option>
                   ))}
                 </select>
               </div>
 
+              {/* Topic self-ratings */}
+              <div className="mb-4">
+                <label className="text-xs font-semibold text-gray-600 mb-2 block">
+                  Confidence by topic (1 = beginner · 10 = expert)
+                </label>
+                {loadingTopics ? (
+                  <div className="flex items-center gap-2 py-3 text-xs text-gray-400">
+                    <Loader2 className="w-3 h-3 animate-spin" /> Loading topics…
+                  </div>
+                ) : topics.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-2">
+                    No topic data for this role yet — roadmap will be built by frequency only.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                    {topics.map((topic) => (
+                      <div key={topic.topicSlug} className="flex items-center gap-2">
+                        <span className="w-28 text-xs text-gray-700 shrink-0 truncate">
+                          {topic.topicName}
+                        </span>
+                        <input
+                          type="range" min="1" max="10" step="1"
+                          value={ratings[topic.topicSlug] ?? 5}
+                          onChange={(e) =>
+                            setRatings((prev) => ({
+                              ...prev,
+                              [topic.topicSlug]: parseInt(e.target.value),
+                            }))
+                          }
+                          className="flex-1 h-1 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                        />
+                        <span className="w-5 text-right text-blue-600 font-bold text-xs shrink-0">
+                          {ratings[topic.topicSlug] ?? 5}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Week picker */}
               <div className="mb-6">
                 <label className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5" /> Commitment Period
