@@ -1,5 +1,6 @@
 /**
  * backend/src/models/Question.ts
+ * (Schema updated via automated documentation pass)
  * Interview question from any source — linked to a company, tagged by topics.
  *
  * BUG-R3 FIX: Added targetRoles[] field so role-based roadmap filtering works.
