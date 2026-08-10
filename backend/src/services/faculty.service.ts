@@ -15,6 +15,7 @@ import { userRepository } from '../repositories/user.repository';
 import { ApiError } from '../utils/apiError';
 import { sanitizeAndLimit } from '../utils/sanitize';
 import mongoose from 'mongoose';
+import CurriculumTopic from '../models/CurriculumTopic';
 
 export const facultyService = {
   /**
@@ -318,73 +319,63 @@ export const facultyService = {
 
   /**
    * Get curriculum coverage gap analysis.
-   * Compares company topicFrequency vs NST course coverage.
+   * Compares CurriculumTopic collection against interview question topic frequency.
+   * Returns { subjects: [], hasData: false } when no curriculum data has been imported.
    */
   async getCurriculumGap() {
-    const questions = await questionRepository.findAll({ limit: 1000 });
+    const nameToSlug = (name: string) =>
+      name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-    // Group by topic and count
-    const topicCounts: Record<string, number> = {};
-    let totalQuestions = 0;
+    const curriculumTopics = await CurriculumTopic.find({}).lean<Array<{
+      courseName: string; semester: number; topicSlug: string;
+      taughtDepth: number; hoursAllocated: number;
+    }>>();
+
+    if (curriculumTopics.length === 0) {
+      return { subjects: [], hasData: false };
+    }
+
+    // Aggregate question topic counts, keyed by slug
+    const questions = await questionRepository.findAll({ limit: 2000 });
+    const slugCounts: Record<string, number> = {};
+    let totalTopicMentions = 0;
     for (const q of questions) {
-      totalQuestions++;
       for (const topic of q.topics) {
-        topicCounts[topic] = (topicCounts[topic] || 0) + 1;
+        const slug = nameToSlug(topic);
+        slugCounts[slug] = (slugCounts[slug] || 0) + 1;
+        totalTopicMentions++;
       }
     }
 
-    const getAlignment = (topics: string[]) => {
-      let count = 0;
-      for (const t of topics) {
-        count += topicCounts[t] || 0;
-      }
-      return Math.min(100, Math.round((count / (totalQuestions || 1)) * 100 * 3)); // arbitrary multiplier to make it look realistic
-    };
+    // Threshold: a topic mentioned this many times is "fully relevant"
+    const uniqueTopicCount = Math.max(1, Object.keys(slugCounts).length);
+    const avgCount = totalTopicMentions / uniqueTopicCount;
+    const threshold = Math.max(3, Math.round(avgCount / 2));
 
-    const subjects = [
-      {
-        subjectName: "Data Structures & Algo",
-        courseCode: "CS201",
-        alignment: getAlignment(['Arrays', 'Strings', 'Dynamic Programming', 'Graph']) || 85,
-        status: "Aligned",
-        topics: ['Arrays', 'Strings', 'Dynamic Programming', 'Graph']
-      },
-      {
-        subjectName: "System Design",
-        courseCode: "CS401",
-        alignment: getAlignment(['System Design', 'Architecture', 'Scalability']) || 70,
-        status: "Moderate",
-        topics: ['System Design', 'Architecture', 'Scalability']
-      },
-      {
-        subjectName: "Web Development",
-        courseCode: "CS301",
-        alignment: getAlignment(['React', 'Node.js', 'Frontend', 'Backend']) || 90,
-        status: "Aligned",
-        topics: ['React', 'Node.js', 'Frontend', 'Backend']
-      },
-      {
-        subjectName: "DBMS & SQL",
-        courseCode: "CS202",
-        alignment: getAlignment(['SQL', 'Database', 'NoSQL']) || 80,
-        status: "Aligned",
-        topics: ['SQL', 'Database', 'NoSQL']
-      },
-      {
-        subjectName: "Cloud Computing",
-        courseCode: "CS402",
-        alignment: getAlignment(['AWS', 'Cloud', 'DevOps']) || 35,
-        status: "Critical",
-        topics: ['AWS', 'Cloud', 'DevOps']
+    // Group by courseName
+    const courseMap = new Map<string, { semester: number; topics: Array<{ slug: string; depth: number }> }>();
+    for (const ct of curriculumTopics) {
+      if (!courseMap.has(ct.courseName)) {
+        courseMap.set(ct.courseName, { semester: ct.semester, topics: [] });
       }
-    ].map(sub => {
-      if (sub.alignment < 40) sub.status = "Critical";
-      else if (sub.alignment < 75) sub.status = "Moderate";
-      else sub.status = "Aligned";
-      return sub;
-    });
+      courseMap.get(ct.courseName)!.topics.push({ slug: ct.topicSlug, depth: ct.taughtDepth });
+    }
 
-    return { subjects };
+    // alignment = mean( min(1, qCount/threshold) * depth/5 ) * 100, per course
+    const subjects = Array.from(courseMap.entries())
+      .map(([courseName, { semester, topics }]) => {
+        const scores = topics.map(({ slug, depth }) =>
+          Math.min(1, (slugCounts[slug] ?? 0) / threshold) * (depth / 5)
+        );
+        const alignment = scores.length > 0
+          ? Math.min(100, Math.round(scores.reduce((s, v) => s + v, 0) / scores.length * 100))
+          : 0;
+        const status = alignment >= 75 ? 'Aligned' : alignment >= 40 ? 'Moderate' : 'Critical';
+        return { courseName, semester, alignment, status, topicCount: topics.length };
+      })
+      .sort((a, b) => a.semester - b.semester || a.courseName.localeCompare(b.courseName));
+
+    return { subjects, hasData: true };
   },
 
   /**
@@ -534,48 +525,29 @@ export const facultyService = {
   },
 
   /**
-   * Get dynamic industry trends based on roadmap and question data
+   * Returns real topic-demand signals derived from verified questions in the DB.
+   * Sorted by aggregate frequencyScore so topics companies weight highly appear first.
+   * No fabricated percentage deltas or hardcoded source strings.
+   * Returns [] when no verified questions with topics exist → empty state fires.
    */
   async getIndustryTrends() {
-     const questions = await questionRepository.findAll({ limit: 500 });
-     
-     // Derive trends logically based on current database questions and their frequency
-     const topicCounts: Record<string, number> = {};
-     questions.forEach(q => {
-       q.topics.forEach(t => {
-         topicCounts[t] = (topicCounts[t] || 0) + 1;
-       });
-     });
-     
-     const sortedTopics = Object.entries(topicCounts).sort((a, b) => b[1] - a[1]);
-     const topTopics = sortedTopics.slice(0, 3);
-     
-     const trends = [];
-     if (topTopics.length > 0) {
-       trends.push({
-         id: 't1',
-         trend: `${topTopics[0][0]} Questions Up ${Math.floor(Math.random() * 30 + 20)}%`,
-         severity: 'High',
-         source: 'Meta, Amazon',
-         detectedAt: new Date().toISOString()
-       });
-     } else {
-        // Fallbacks
-        trends.push({ id: 't1', trend: 'System Design Questions Up 40%', severity: 'High', source: 'Meta, Amazon', detectedAt: new Date().toISOString() });
-     }
-     
-     if (topTopics.length > 1) {
-       trends.push({
-         id: 't2',
-         trend: `${topTopics[1][0]} demand increasing`,
-         severity: 'Medium',
-         source: 'Google, Vercel',
-         detectedAt: new Date().toISOString()
-       });
-     } else {
-        trends.push({ id: 't2', trend: 'React Server Components demand increasing', severity: 'Medium', source: 'Google, Vercel', detectedAt: new Date().toISOString() });
-     }
-     
-     return trends;
-  }
+    const rows = await questionRepository.getTopicDemandSignals();
+    if (rows.length === 0) return [];
+
+    return rows.map((r, i) => {
+      const severity: 'High' | 'Medium' | 'Low' =
+        r.hotCount > 0      ? 'High'   :
+        r.companyCount >= 3 ? 'Medium' : 'Low';
+
+      const source = r.companies.filter(Boolean).slice(0, 2).join(', ') || 'Multiple companies';
+
+      return {
+        id:         `topic-${i}`,
+        trend:      `${r.topic} — ${r.questionCount.toLocaleString()} questions across ${r.companyCount} companies`,
+        severity,
+        source,
+        detectedAt: new Date().toISOString(),
+      };
+    });
+  },
 };
