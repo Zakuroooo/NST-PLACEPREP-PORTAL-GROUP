@@ -19,7 +19,8 @@ import connectDB from 'placeprep-backend/src/config/db';
 import { requireStudent } from 'placeprep-backend/src/utils/authMiddleware';
 import { roadmapRepository } from 'placeprep-backend/src/repositories/roadmap.repository';
 import { companyRepository } from 'placeprep-backend/src/repositories/company.repository';
-import { questionRepository } from 'placeprep-backend/src/repositories/question.repository';
+import { studentRepository } from 'placeprep-backend/src/repositories/student.repository';
+import { roadmapService } from 'placeprep-backend/src/services/roadmap.service';
 import { successResponse } from 'placeprep-backend/src/utils/apiResponse';
 import { handleApiError, ApiError } from 'placeprep-backend/src/utils/apiError';
 import {
@@ -27,7 +28,6 @@ import {
   getClientIp,
   RATE_LIMITS,
 } from 'placeprep-backend/src/utils/rateLimiter';
-import mongoose from 'mongoose';
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
@@ -40,18 +40,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 }
 
-/**
- * BUG-R2 FIX: Compute questionsPerWeek and minFrequency based on prep duration.
- * Shorter plans = more intense (fewer but hotter questions per week).
- * Longer plans  = broader coverage (more questions, lower frequency bar).
- */
-function getRoadmapParams(weeks: number): { questionsPerWeek: number; minFrequency: number } {
-  if (weeks <= 4)  return { questionsPerWeek: 15, minFrequency: 0.6 };
-  if (weeks <= 6)  return { questionsPerWeek: 12, minFrequency: 0.4 };
-  if (weeks <= 8)  return { questionsPerWeek: 10, minFrequency: 0.25 };
-  if (weeks <= 12) return { questionsPerWeek: 7,  minFrequency: 0.1 };
-  return             { questionsPerWeek: 5,  minFrequency: 0.0 };
-}
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // Rate limit roadmap creation to prevent spam
@@ -102,64 +90,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const companyId = (company._id as any).toString();
 
     const userWeeks = Math.min(Math.max(Number(preparationWeeks) || 12, 4), 52);
-    const { questionsPerWeek, minFrequency } = getRoadmapParams(userWeeks);
+    const safeRole = (typeof targetRole === 'string' && targetRole.trim()) ? targetRole.trim() : 'SDE-1';
+    const selfRatings = (typeof body.topicSelfRatings === 'object' && body.topicSelfRatings !== null)
+      ? body.topicSelfRatings as Record<string, number>
+      : {};
 
-    // ── Build curriculum weeks from company's real topic frequency data ──
-    const topicFrequency: Array<{ topicName: string; questionCount: number }> =
-      (company as any).topicFrequency ?? [];
-
-    // Pick the top N topics by question count (N = weeksCommitted)
-    const topTopics = topicFrequency
-      .filter(t => t.questionCount > 0)
-      .sort((a, b) => b.questionCount - a.questionCount)
-      .slice(0, userWeeks);
-
-    const DEFAULT_TOPICS = [
-      'Arrays', 'Strings', 'Dynamic Programming', 'Trees', 'Graphs',
-      'Greedy', 'Binary Search', 'Hash Tables', 'Sorting', 'Two Pointers',
-    ];
-    const weekTopics = topTopics.length >= 2
-      ? topTopics.map(t => t.topicName)
-      : DEFAULT_TOPICS.slice(0, userWeeks);
-
-    // Fill remaining weeks if company has fewer topics than weeks
-    while (weekTopics.length < userWeeks) {
-      weekTopics.push(DEFAULT_TOPICS[weekTopics.length % DEFAULT_TOPICS.length]);
+    // Persist fresh ratings — merge into StudentProfile without wiping onboarding ratings
+    if (Object.keys(selfRatings).length > 0) {
+      await studentRepository.mergeTopicRatings(user.userId, selfRatings);
     }
 
-    // Build weeks — FIX: catch per-week question query failures gracefully
-    const weeks = await Promise.all(weekTopics.map(async (t, i) => {
-      const freqItem = topicFrequency.find(tf => tf.topicName === t);
-      const originalCount = freqItem ? freqItem.questionCount : 10;
-
-      let actualCount = 0;
-      try {
-        const result = await questionRepository.findMany({
-          companySlug: safeSlug,
-          topic: t,
-          minFrequency,
-          limit: 1, // only need total count
-        });
-        actualCount = result.total;
-      } catch (_queryErr) {
-        // If per-week question query fails, fall back to topicFrequency data
-        actualCount = 0;
-      }
-
-      const cappedCount = Math.min(Math.max(actualCount, 0), questionsPerWeek);
-      const finalCount = cappedCount > 0
-        ? cappedCount
-        : Math.min(Math.max(originalCount, 1), questionsPerWeek);
-
-      return {
-        weekNumber: i + 1,
-        topicLabel: t,
-        totalQuestions: finalCount,
-        doneQuestions: 0,
-        status: (i === 0 ? 'active' : 'locked') as 'active' | 'locked' | 'done',
-        questionIds: [] as mongoose.Types.ObjectId[],
-      };
-    }));
+    // Phase 2: unified builder — self-ratings affect order; questionIds populated
+    const weeks = await roadmapService.buildWeeks({
+      companySlug: safeSlug,
+      targetRole: safeRole,
+      prepWeeks: userWeeks,
+      topicSelfRatings: selfRatings,
+    });
 
     let newRoadmap;
     try {
@@ -169,7 +116,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         companySlug: safeSlug,
         companyName: company.name,
         companyLogoUrl: (company as any).logoUrl || undefined,
-        roleName: (typeof targetRole === 'string' && targetRole.trim()) ? targetRole.trim() : 'SDE-1',
+        roleName: safeRole,
         weeksCommitted: weeks.length,
         currentWeek: 1,
         pctComplete: 0,
