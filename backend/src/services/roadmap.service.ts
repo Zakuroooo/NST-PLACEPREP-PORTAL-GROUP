@@ -123,13 +123,14 @@ export const roadmapService = {
       });
     }
 
-    // Append generic-pool weeks for non-Coding rounds in the company's roundStructure.
-    // Each round type maps to a null-slug pool (aptitude_mcq, system_design, etc.).
-    // These extend the plan beyond prepWeeks — they cover rounds the company actually runs
-    // that have no company-specific questions.
+    // Replace low-priority topic weeks with generic-pool weeks for non-Coding rounds
+    // (Aptitude, System Design, HR, Domain) that the company actually runs.
+    // IMPORTANT: we NEVER exceed prepWeeks — generic weeks slot into the TAIL of the
+    // weeks array, replacing the weakest topic weeks so the total stays exactly prepWeeks.
     const companyRoundTypes = await companyRepository.findRoundTypes(companySlug);
-    const genericWeeks: RoadmapWeekDraft[] = [];
 
+    // Collect all applicable generic weeks first (may be fewer than available slots).
+    const genericDrafts: RoadmapWeekDraft[] = [];
     for (const [roundType, { questionType, label }] of Object.entries(GENERIC_ROUND_MAP)) {
       if (!companyRoundTypes.includes(roundType)) continue;
       const poolQuestions = await questionRepository.findManyGenericPool({
@@ -147,8 +148,8 @@ export const roadmapService = {
         else breakdown.dsa++;
       });
 
-      genericWeeks.push({
-        weekNumber: weeks.length + genericWeeks.length + 1,
+      genericDrafts.push({
+        weekNumber: 0, // renumbered below
         topicLabel: label,
         totalQuestions: poolQuestions.length,
         doneQuestions: 0,
@@ -160,6 +161,21 @@ export const roadmapService = {
       });
     }
 
-    return [...weeks, ...genericWeeks];
+    // Splice generic weeks into the tail of the weeks array (replace last N topic weeks)
+    // so the total never exceeds prepWeeks.
+    const slotsForGeneric = Math.min(genericDrafts.length, prepWeeks);
+    const topicWeeks = weeks.slice(0, prepWeeks - slotsForGeneric);
+    const finalWeeks = [
+      ...topicWeeks,
+      ...genericDrafts.slice(0, slotsForGeneric),
+    ];
+
+    // Re-number all weeks sequentially and mark week-1 active, rest locked.
+    finalWeeks.forEach((w, idx) => {
+      w.weekNumber = idx + 1;
+      w.status = idx === 0 ? 'active' : 'locked';
+    });
+
+    return finalWeeks;
   },
 };

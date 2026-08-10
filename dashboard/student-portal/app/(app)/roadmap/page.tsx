@@ -418,10 +418,14 @@ function WeekQuestions({
         const qId = (q._id || q.id)?.toString();
         // BUG-B12 FIX: Prefer localDone for optimistic UI, fall back to server state
         const isDone = localDone[qId] ?? completedIds.has(qId);
-        // BUG-R1 FIX: Question model fields — .problemSummary not .title, .difficulty not .diff, .xpValue not .xp
+        // BUG-R1 FIX: Question model fields — .problemSummary not .title, .difficulty not .diff
+        // XP is derived from difficulty only (Easy=10 / Medium=25 / Hard=50) — same mapping
+        // as XP_BY_DIFFICULTY in student.service.ts and the dashboard todayQs calculation.
+        // Do NOT use q.xpValue: it defaults to 10 for all questions in many DB records,
+        // which caused the mismatch between dashboard (25 XP) and roadmap (10 XP).
         const title = q.problemSummary || q.title || 'Untitled Question';
         const difficulty = q.difficulty || q.diff || 'Medium';
-        const xp = q.xpValue || (difficulty === 'Hard' ? 50 : difficulty === 'Medium' ? 25 : 10);
+        const xp = difficulty === 'Hard' ? 50 : difficulty === 'Medium' ? 25 : 10;
         return (
           <div
             key={qId}
