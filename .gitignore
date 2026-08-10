@@ -12,3 +12,6 @@
 **/.env.*
 scratch.ts
 *.patch
+data/staging/
+data/staging/parsed/
+**/*.tsbuildinfo

@@ -159,6 +159,11 @@ export default function RequestsPage() {
 
   const handleProposeSubmit = (id: string) => {
     if (!proposedDate || !proposedTime) return;
+    // BUG-FIX G1: reject past dates that bypass the input min attribute (e.g. manual typing)
+    if (proposedDate < format(new Date(), "yyyy-MM-dd")) {
+      toast.error("Please pick a date that isn't in the past.");
+      return;
+    }
     setRequests((prev) =>
       prev.map((r) =>
         r.id === id ? { ...r, status: "proposed", proposedDate, proposedTime } : r
@@ -521,6 +526,7 @@ export default function RequestsPage() {
                                   type="date"
                                   value={proposedDate}
                                   onChange={(e) => setProposedDate(e.target.value)}
+                                  min={format(new Date(), "yyyy-MM-dd")} // BUG-FIX G1
                                   className="text-xs border border-gray-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                                 />
                                 <select

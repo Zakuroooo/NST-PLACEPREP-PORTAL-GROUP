@@ -11,6 +11,8 @@ import {
   LogOut,
   LayoutList,
   Trophy,
+  BookOpen,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -21,6 +23,8 @@ const navigation = [
   { name: "Student Matrix", href: "/students", icon: LayoutList },
   { name: "Leaderboard", href: "/leaderboard", icon: Trophy },
   { name: "Company Rankings", href: "/rankings", icon: Building2 },
+  { name: "Curriculum Gap", href: "/curriculum", icon: BookOpen },
+  { name: "Industry Trends", href: "/trends", icon: TrendingUp },
   { name: "Export Reports", href: "/reports", icon: Send },
 ];
 
