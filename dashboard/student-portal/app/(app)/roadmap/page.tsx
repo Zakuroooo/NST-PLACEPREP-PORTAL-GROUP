@@ -426,6 +426,7 @@ function WeekQuestions({
                     globalMutate('/api/dashboard'),
                     globalMutate('/api/progress'),
                     globalMutate('/api/user/me/roadmap'),
+                    globalMutate('/api/user/me'),
                   ]);
                 } else {
                   const res = await fetch(`/api/questions/${qId}/complete`, {
@@ -439,6 +440,7 @@ function WeekQuestions({
                     globalMutate('/api/dashboard'),
                     globalMutate('/api/progress'),
                     globalMutate('/api/user/me/roadmap'),
+                    globalMutate('/api/user/me'),
                   ]);
                 }
               } catch {
