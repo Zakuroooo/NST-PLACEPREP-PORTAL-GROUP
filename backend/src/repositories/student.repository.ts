@@ -103,6 +103,22 @@ export const studentRepository = {
     );
   },
 
+  /**
+   * Merge specific topicSelfRatings keys without overwriting the whole Map.
+   * Uses dot-notation $set so unrelated existing keys are untouched.
+   */
+  async mergeTopicRatings(userId: string, ratings: Record<string, number>): Promise<void> {
+    if (Object.keys(ratings).length === 0) return;
+    const update: Record<string, number> = {};
+    for (const [slug, rating] of Object.entries(ratings)) {
+      update[`topicSelfRatings.${slug}`] = rating;
+    }
+    await StudentProfile.findOneAndUpdate(
+      { userId: new mongoose.Types.ObjectId(userId) },
+      { $set: update }
+    );
+  },
+
   async deleteAllSeeded(): Promise<void> {
     await StudentProfile.deleteMany({ isSeeded: true });
   },

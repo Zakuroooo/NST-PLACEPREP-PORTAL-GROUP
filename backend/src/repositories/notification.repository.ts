@@ -6,8 +6,11 @@ import Notification, { INotification } from '../models/Notification';
 import mongoose from 'mongoose';
 
 export const notificationRepository = {
-  async findByUserId(userId: string, limit = 20): Promise<INotification[]> {
-    return Notification.find({ userId: new mongoose.Types.ObjectId(userId) })
+  async findByUserId(userId: string, limit = 20, types?: string[]): Promise<INotification[]> { // BUG-FIX F1
+    return Notification.find({
+      userId: new mongoose.Types.ObjectId(userId),
+      ...(types?.length ? { type: { $in: types } } : {}), // BUG-FIX F1
+    })
       .sort({ createdAt: -1 })
       .limit(limit)
       .lean<INotification[]>();

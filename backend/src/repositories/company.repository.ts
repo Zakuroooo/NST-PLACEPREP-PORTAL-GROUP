@@ -82,4 +82,39 @@ export const companyRepository = {
   async deleteAllSeeded(): Promise<void> {
     await Company.deleteMany({ isSeeded: true });
   },
+
+  async findRoundTypes(slug: string): Promise<string[]> {
+    const doc = await Company.findOne({ slug: slug.toLowerCase() })
+      .select('roundStructure')
+      .lean<ICompany>();
+    return ((doc?.roundStructure ?? []) as Array<{ roundType?: string }>)
+      .map(r => r.roundType ?? '')
+      .filter(Boolean);
+  },
+
+  async findRoleTopics(slug: string, roleName: string): Promise<Array<{
+    topicSlug: string;
+    topicName: string;
+    frequencyPct: number;
+    questionCount: number;
+    roundType?: string;
+  }>> {
+    const company = await Company.findOne({ slug: slug.toLowerCase() })
+      .select('roleTopicFrequency topicFrequency')
+      .lean<ICompany>();
+    if (!company) return [];
+
+    const roleEntry = (company.roleTopicFrequency ?? []).find(r => r.roleName === roleName);
+    if (roleEntry?.topics?.length) {
+      return roleEntry.topics;
+    }
+
+    // Fallback: use flat topicFrequency mapped to the same shape
+    return (company.topicFrequency ?? []).map(t => ({
+      topicSlug: t.topicSlug,
+      topicName: t.topicName,
+      frequencyPct: t.frequencyPct,
+      questionCount: t.questionCount,
+    }));
+  },
 };
