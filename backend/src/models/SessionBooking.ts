@@ -1,5 +1,6 @@
 /**
  * backend/src/models/SessionBooking.ts
+ * (Schema updated via automated documentation pass)
  * Student–faculty 1:1 mentorship session bookings.
  * Auto-generates a Jitsi Meet link when status moves to 'confirmed'.
  */
