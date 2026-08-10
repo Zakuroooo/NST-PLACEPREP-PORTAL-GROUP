@@ -1,5 +1,6 @@
 /**
  * backend/src/models/Company.ts
+ * (Schema updated via automated documentation pass)
  * Company intelligence record — includes denormalized roundStructure,
  * topicFrequency, and difficultyDistribution for fast single-document reads.
  */
