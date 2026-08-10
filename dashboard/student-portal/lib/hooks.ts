@@ -21,6 +21,20 @@ const fetcher = async (url: string) => {
   return json.data ?? json;
 };
 
+// ── Practice fetcher — preserves { data, meta } for pagination ─────────────
+const practiceFetcher = async (url: string) => {
+  const res = await fetch(url, { credentials: 'include' });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
+    throw new Error(err?.error?.message ?? 'Request failed');
+  }
+  const json = await res.json();
+  return {
+    data: (json.data ?? []) as unknown[],
+    meta: (json.meta ?? null) as { page: number; limit: number; total: number; totalPages: number } | null,
+  };
+};
+
 // ── Mutations ──────────────────────────────────────────────────────────────
 export async function apiFetch<T = unknown>(
   url: string,
@@ -85,7 +99,7 @@ export function useRoadmap() {
   });
 }
 
-export async function addRoadmapCompany(data: { companySlug: string; targetRole: string; preparationWeeks: number }) {
+export async function addRoadmapCompany(data: { companySlug: string; targetRole: string; preparationWeeks: number; topicSelfRatings?: Record<string, number> }) {
   const result = await apiFetch('/api/user/me/roadmap', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -165,6 +179,7 @@ export function useSessions() {
   return useSWR('/api/sessions', fetcher, {
     revalidateOnFocus: true,
     dedupingInterval: 30_000,
+    refreshInterval: 15_000, // BUG-FIX C1: poll so faculty-side status changes appear within ~15s
   });
 }
 
@@ -244,18 +259,24 @@ export function usePractice(filters: {
   difficulty?: string;
   company?: string;
   roundType?: string;
+  questionType?: string;
+  isMcq?: boolean;
   page?: number;
   limit?: number;
+  enabled?: boolean;
 }) {
   const qs = new URLSearchParams();
   if (filters.topic) qs.append("topic", filters.topic);
   if (filters.difficulty) qs.append("difficulty", filters.difficulty);
   if (filters.company) qs.append("company", filters.company);
   if (filters.roundType) qs.append("roundType", filters.roundType);
+  if (filters.questionType) qs.append("questionType", filters.questionType);
+  if (filters.isMcq !== undefined) qs.append("isMcq", String(filters.isMcq));
   if (filters.page) qs.append("page", String(filters.page));
   if (filters.limit) qs.append("limit", String(filters.limit));
 
-  return useSWR(`/api/practice?${qs.toString()}`, fetcher);
+  const key = filters.enabled === false ? null : `/api/practice?${qs.toString()}`;
+  return useSWR(key, practiceFetcher);
 }
 
 export function useTopics() {
@@ -266,16 +287,24 @@ export function usePracticeStats() {
   return useSWR('/api/practice/stats', fetcher);
 }
 
+export function usePracticeCategories() {
+  return useSWR('/api/practice/categories', fetcher, {
+    revalidateOnFocus: false,
+    dedupingInterval: 300_000,
+  });
+}
+
 export async function completeQuestion(questionId: string, roadmapId?: string) {
   const result = await apiFetch(`/api/questions/${questionId}/complete`, {
     method: 'POST',
     body: JSON.stringify({ roadmapId }),
   });
-  // Revalidate progress + roadmap after completion
+  // Revalidate progress + roadmap + profile after completion
   await Promise.all([
     globalMutate('/api/progress'),
     globalMutate('/api/user/me/roadmap'),
     globalMutate('/api/dashboard'),
+    globalMutate('/api/user/me'), // BUG-FIX A2: update navbar XP badge immediately
   ]);
   return result;
 }
@@ -298,6 +327,7 @@ export async function submitOnboarding(data: {
   topicSelfRatings: Record<string, number>;
   targetCompanySlugs: string[];
   prepWeeksCommitted: number;
+  targetRole: string;
 }) {
   return apiFetch('/api/user/me/onboarding', {
     method: 'POST',

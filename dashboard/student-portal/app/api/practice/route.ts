@@ -16,26 +16,38 @@ import { rateLimit } from '@/lib/rateLimit';
 /** Normalize raw DB question → shape the frontend expects */
 function normalizeQuestion(q: any) {
   return {
-    _id:          q._id,
-    id:           q._id,                          // alias
-    title:        q.problemSummary,               // DB → frontend
-    diff:         q.difficulty,                   // DB → frontend
-    difficulty:   q.difficulty,                   // keep both
-    xp:           q.xpValue ?? 10,               // DB → frontend
-    xpValue:      q.xpValue ?? 10,
-    hot:          q.isHot ?? false,              // DB → frontend
-    isHot:        q.isHot ?? false,
-    topic:        Array.isArray(q.topics) ? q.topics[0] : (q.topics ?? ''),
-    topics:       q.topics ?? [],
-    frequency:    q.frequencyScore != null ? Math.round(q.frequencyScore * 100) : null,
-    frequencyScore: q.frequencyScore ?? 0,
-    roundType:    q.roundType,
-    companySlug:  q.companySlug,
-    companyName:  q.companyName,
-    sourceUrl:    q.sourceUrl,
-    leetcodeUrl:  q.leetcodeUrl ?? q.sourceUrl,  // fallback to sourceUrl if no leetcodeUrl
-    source:       q.source,
-    verified:     q.verified ?? false,
+    _id:              q._id,
+    id:               q._id,
+    title:            q.problemSummary,
+    diff:             q.difficulty,
+    difficulty:       q.difficulty,
+    xp:               q.xpValue ?? 10,
+    xpValue:          q.xpValue ?? 10,
+    hot:              q.isHot ?? false,
+    isHot:            q.isHot ?? false,
+    topic:            Array.isArray(q.topics) ? q.topics[0] : (q.topics ?? ''),
+    topics:           q.topics ?? [],
+    frequency:        q.frequencyScore != null ? Math.round(q.frequencyScore * 100) : null,
+    frequencyScore:   q.frequencyScore ?? 0,
+    roundType:        q.roundType,
+    questionType:     q.questionType,
+    isMcq:            q.isMcq ?? false,
+    companySlug:      q.companySlug,
+    companyName:      q.companyName,
+    sourceUrl:        q.sourceUrl ?? null,
+    // Only use the real leetcodeUrl — do NOT fall back to sourceUrl (which is a GitHub
+    // link for Phase 7 scraped records and would incorrectly trigger an external-link button)
+    leetcodeUrl:      q.leetcodeUrl ?? null,
+    source:           q.source,
+    verified:         q.verified ?? false,
+    // Detail fields — all passed through for inline MCQ/answer rendering
+    options:          q.options ?? [],
+    explanation:      q.explanation ?? null,
+    sampleAnswer:     q.sampleAnswer ?? null,
+    keyPoints:        q.keyPoints ?? [],
+    hints:            q.hints ?? [],
+    followUpQuestions: q.followUpQuestions ?? [],
+    cautionSource:    q.cautionSource ?? false,
   };
 }
 
@@ -54,20 +66,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     const { searchParams } = new URL(request.url);
-    const rawTopic    = searchParams.get('topic')      || undefined;
-    const difficulty  = searchParams.get('difficulty') || undefined;
-    const roundType   = searchParams.get('roundType')  || undefined;
-    const companySlug = searchParams.get('company')    || undefined;
+    const rawTopic    = searchParams.get('topic')        || undefined;
+    const difficulty  = searchParams.get('difficulty')   || undefined;
+    const roundType   = searchParams.get('roundType')    || undefined;
+    const questionType = searchParams.get('questionType') || undefined;
+    const companySlug = searchParams.get('company')      || undefined;
+    const isMcqParam  = searchParams.get('isMcq');
+    const isMcq       = isMcqParam === 'true' ? true : isMcqParam === 'false' ? false : undefined;
     const page  = Math.max(1, Number(searchParams.get('page'))  || 1);
-    // Raised from 50 → 500 so company practice pages show all questions
     const limit = Math.min(Number(searchParams.get('limit')) || 100, 500);
 
     // Handle compound topic labels like "Arrays & Strings" from roadmap week names.
-    // The DB stores individual topics: ["Arrays"], ["Strings"] — not the combined label.
-    // We split by & and try each part, taking the first that returns results.
     let topic: string | undefined = rawTopic;
     if (rawTopic && rawTopic.includes('&')) {
-      // Pass undefined so repository fetches all, then filter client-side below
       topic = undefined;
     }
 
@@ -80,6 +91,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       topic,
       difficulty,
       roundType: roundTypeQuery as any,
+      questionType,
+      isMcq,
       companySlug,
       page,
       limit,
