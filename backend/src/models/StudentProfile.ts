@@ -1,5 +1,6 @@
 /**
  * backend/src/models/StudentProfile.ts
+ * (Schema updated via automated documentation pass)
  * Extended student data — 1:1 with User (userId = User._id).
  */
 
