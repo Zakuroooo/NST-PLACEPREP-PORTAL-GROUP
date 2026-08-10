@@ -161,9 +161,18 @@ export async function proposeAlternative(id: string, proposedDate: string, propo
 }
 
 // ─── Doubts ──────────────────────────────────────────────────────
-export async function getDoubts(status?: string): Promise<{ doubts: DoubtData[]; total: number }> {
+/**
+ * GET /api/faculty/doubts
+ *
+ * The route replies with successResponse(threads) where threads is a bare
+ * array, and apiFetch already unwraps `json.data`. This used to be typed as
+ * `{ doubts, total }`, so callers destructured `{ doubts }` off an array and
+ * got undefined — the doubt list silently rendered empty. Return the array.
+ */
+export async function getDoubts(status?: string): Promise<DoubtData[]> {
   const q = status ? `?status=${status}` : "";
-  return apiFetch<{ doubts: DoubtData[]; total: number }>(`/api/faculty/doubts${q}`);
+  const data = await apiFetch<DoubtData[]>(`/api/faculty/doubts${q}`);
+  return Array.isArray(data) ? data : [];
 }
 
 export async function replyToDoubt(doubtId: string, body: string) {
