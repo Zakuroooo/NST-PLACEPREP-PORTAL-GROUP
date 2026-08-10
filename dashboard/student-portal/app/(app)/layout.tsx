@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { useProfile } from "@/lib/hooks";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { data: profile, isLoading } = useProfile();
+  const { data: profile, isLoading, error, mutate } = useProfile();
   const router = useRouter();
 
   useEffect(() => {
@@ -16,6 +16,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       router.push("/onboarding/step1");
     }
   }, [profile, isLoading, router]);
+
+  // This gate blocks the entire portal on a single request, so it needs an
+  // error branch — without one a failed /api/user/me left every page showing
+  // the spinner forever with no way back.
+  if (error && !profile) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+        <div className="max-w-md w-full text-center">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Couldn&apos;t load your profile
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            {error instanceof Error ? error.message : "Something went wrong."}
+          </p>
+          <div className="mt-5 flex items-center justify-center gap-3">
+            <button
+              onClick={() => mutate()}
+              className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+            >
+              Try again
+            </button>
+            <button
+              onClick={() => router.push("/login")}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-100 transition-colors"
+            >
+              Sign in again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading || (profile && profile.onboardingComplete === false)) {
     return (

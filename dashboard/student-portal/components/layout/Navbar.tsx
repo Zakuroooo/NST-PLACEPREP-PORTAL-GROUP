@@ -1,38 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Bell, Zap, Menu } from "lucide-react";
 import { useNavbar } from "@/lib/navbar-context";
-import { useProfile } from "@/lib/hooks";
-
-// Unread notification count — reads from API
-function useUnreadCount() {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    // Fetch unread notification count from backend API
-    const fetchUnreadCount = async () => {
-      try {
-        const response = await fetch('/api/notifications/unread-count');
-        if (response.ok) {
-          const contentType = response.headers.get("content-type");
-          if (contentType && contentType.indexOf("application/json") !== -1) {
-            const data = await response.json();
-            setCount(data.unreadCount || 0);
-          }
-        }
-      } catch (error) {
-        console.error('Failed to fetch unread notifications count:', error);
-      }
-    };
-
-    fetchUnreadCount();
-
-    // Poll every 60 seconds
-    const intervalId = setInterval(fetchUnreadCount, 60000);
-    return () => clearInterval(intervalId);
-  }, []);
-  return count;
-}
+import { useProfile, useUnreadNotificationCount } from "@/lib/hooks";
 
 export default function Navbar() {
   const { data: profile } = useProfile();
@@ -44,7 +14,7 @@ export default function Navbar() {
   } : null;
 
   const { isMobileMenuOpen, setMobileMenuOpen } = useNavbar();
-  const unreadCount = useUnreadCount();
+  const unreadCount = useUnreadNotificationCount();
 
   // BUG-FIX: derive XP from live profile data (was hardcoded 2450 fallback)
   const xp = user?.xp ?? 0;

@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useSessions, updateSessionStatus } from "@/lib/hooks"; // BUG-FIX C1: use SWR hook
+import ErrorState from "@/components/ErrorState";
 
 type SessionStatus = "pending" | "confirmed" | "proposed" | "completed" | "cancelled";
 
@@ -372,7 +373,7 @@ export default function SessionsPage() {
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
 
   // BUG-FIX C1: use SWR hook — revalidateOnFocus + refreshInterval:15s (set in hooks.ts)
-  const { data: rawSessionsData, isLoading, mutate: mutateSessions } = useSessions();
+  const { data: rawSessionsData, isLoading, error: sessionsError, mutate: mutateSessions } = useSessions();
 
   // BUG-FIX C1: derive sessions from SWR data via useMemo
   const sessions = useMemo<Session[]>(() => {
@@ -475,6 +476,10 @@ export default function SessionsPage() {
 
   const upcoming = displayedSessions.filter((s) => ["pending", "confirmed", "proposed"].includes(s.status));
   const past = displayedSessions.filter((s) => ["completed", "cancelled"].includes(s.status));
+
+  if (sessionsError) {
+    return <ErrorState error={sessionsError} title="Couldn't load your sessions" onRetry={() => mutateSessions()} />;
+  }
 
   if (isLoading) {
     return (

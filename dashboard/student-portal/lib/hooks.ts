@@ -10,9 +10,37 @@
 
 import useSWR, { mutate as globalMutate } from 'swr';
 
+// ── Fetch timeout ──────────────────────────────────────────────────────────
+// Without this, a request that never settles leaves SWR's isLoading stuck at
+// true forever — the page renders its spinner branch permanently with no error
+// to fall back to. Every read goes through fetchWithTimeout so a hung request
+// eventually rejects and pages can show an error state instead of hanging.
+export const REQUEST_TIMEOUT_MS = 15_000;
+
+export class TimeoutError extends Error {
+  constructor(message = 'Request timed out. Please check your connection and try again.') {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+async function fetchWithTimeout(url: string, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { credentials: 'include', signal: controller.signal });
+  } catch (e) {
+    // A timeout surfaces as an AbortError; translate it into a message a user can act on.
+    if (e instanceof DOMException && e.name === 'AbortError') throw new TimeoutError();
+    throw e instanceof Error ? e : new Error('Network request failed');
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ── Fetcher ────────────────────────────────────────────────────────────────
-const fetcher = async (url: string) => {
-  const res = await fetch(url, { credentials: 'include' });
+export const fetcher = async (url: string) => {
+  const res = await fetchWithTimeout(url);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
     throw new Error(err?.error?.message ?? 'Request failed');
@@ -23,7 +51,7 @@ const fetcher = async (url: string) => {
 
 // ── Practice fetcher — preserves { data, meta } for pagination ─────────────
 const practiceFetcher = async (url: string) => {
-  const res = await fetch(url, { credentials: 'include' });
+  const res = await fetchWithTimeout(url);
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: { message: res.statusText } }));
     throw new Error(err?.error?.message ?? 'Request failed');
@@ -40,11 +68,24 @@ export async function apiFetch<T = unknown>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(url, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...((options.headers as object) || {}) },
-    ...options,
-  });
+  // Mutations get the same timeout guarantee as reads — a hung POST otherwise
+  // leaves the caller's "submitting" flag stuck and the button disabled forever.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      credentials: 'include',
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...((options.headers as object) || {}) },
+      ...options,
+    });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') throw new TimeoutError();
+    throw e instanceof Error ? e : new Error('Network request failed');
+  } finally {
+    clearTimeout(timer);
+  }
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(json?.error?.message ?? 'Request failed');
@@ -54,11 +95,11 @@ export async function apiFetch<T = unknown>(
 
 // ── Dashboard ──────────────────────────────────────────────────────────────
 export function useDashboard() {
-  const { data, error, isLoading } = useSWR('/api/dashboard', fetcher, {
+  const { data, error, isLoading, mutate } = useSWR('/api/dashboard', fetcher, {
     revalidateOnFocus: true,
     dedupingInterval: 5_000, // reduced from 30s so roadmap additions are reflected quickly
   });
-  return { data, error, isLoading };
+  return { data, error, isLoading, mutate };
 }
 
 // ── Profile ────────────────────────────────────────────────────────────────
@@ -131,8 +172,23 @@ export function useNotifications() {
   return { data, error, isLoading, mutate };
 }
 
-export async function markNotificationRead(id: string) {
-  await apiFetch(`/api/notifications/${id}`, { method: 'PATCH' });
+/**
+ * Unread notification badge count.
+ * Previously a hand-rolled setInterval in Navbar.tsx that ran on every page in
+ * addition to useNotifications' own 30s poll — two timers hitting the same
+ * subsystem. Going through SWR means it dedupes, shares cache, and stops
+ * polling while the tab is hidden.
+ */
+export function useUnreadNotificationCount(): number {
+  const { data } = useSWR('/api/notifications/unread-count', fetcher, {
+    refreshInterval: 60_000,
+    dedupingInterval: 30_000,
+    revalidateOnFocus: true,
+  });
+  return data?.unreadCount ?? 0;
+}
+
+export async function markNotificationRead(id: string) {  await apiFetch(`/api/notifications/${id}`, { method: 'PATCH' });
   await globalMutate('/api/notifications');
 }
 

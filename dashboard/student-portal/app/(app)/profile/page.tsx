@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { updateProfile, useProfile, useRoadmap } from "@/lib/hooks";
+import ErrorState from "@/components/ErrorState";
 import { toast } from "sonner";
 import {
  User, Settings, BarChart2, Bell,
@@ -907,8 +908,8 @@ export default function ProfilePage() {
  ];
 
  // ── Real user data from backend ──────────────────────
- const { data: rawProfile, isLoading: profileLoading } = useProfile();
- const { data: roadmaps, isLoading: roadmapsLoading } = useRoadmap();
+ const { data: rawProfile, isLoading: profileLoading, error: profileError, mutate: retryProfile } = useProfile();
+ const { data: roadmaps, isLoading: roadmapsLoading, error: roadmapsError, mutate: retryRoadmaps } = useRoadmap();
 
  // Merge real data over defaults — real fields take precedence
  const user = {
@@ -959,6 +960,18 @@ export default function ProfilePage() {
    })
   } : {}),
  };
+
+ // Without this, a failed profile fetch left the defaultUser placeholder data
+ // rendering as if it were the signed-in student's real profile.
+ if (profileError || roadmapsError) {
+  return (
+   <ErrorState
+    error={profileError ?? roadmapsError}
+    title="Couldn't load your profile"
+    onRetry={() => { retryProfile(); retryRoadmaps(); }}
+   />
+  );
+ }
 
  if (profileLoading || roadmapsLoading) {
   return (

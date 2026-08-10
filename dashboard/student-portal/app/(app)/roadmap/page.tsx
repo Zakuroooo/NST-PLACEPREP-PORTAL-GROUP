@@ -10,14 +10,14 @@ import {
 import { toast } from "sonner";
 import { Suspense } from "react";
 import useSWR, { mutate as globalMutate } from "swr";
-import { useRoadmap, useCompanies } from "@/lib/hooks";
+import { useRoadmap, useCompanies, fetcher } from "@/lib/hooks";
 import { type UserRoadmapCompany } from "@/lib/constants";
+import ErrorState from "@/components/ErrorState";
 
-// Credentialed fetcher for SWR — sends JWT cookie with every request
-const fetcher = (url: string) =>
-  fetch(url, { credentials: 'include' })
-    .then(r => r.json())
-    .then(j => j.data ?? j);
+// Credentialed fetcher for SWR — sends JWT cookie with every request.
+// Uses the shared fetcher from lib/hooks (imported above): the local copy had
+// no timeout, so a hung week-questions request left the week panel spinning
+// indefinitely, and no res.ok check, so an error body was rendered as data.
 
 // ─── Company logo helper ─────────────────────────────────────────────────────
 // BUG-R6 FIX: Was a hardcoded map of only 10 companies.
@@ -165,7 +165,7 @@ function RoadmapContent() {
   const searchParams = useSearchParams();
 
   // Real roadmaps from API
-  const { data: roadmapData, mutate, isLoading } = useRoadmap();
+  const { data: roadmapData, mutate, isLoading, error } = useRoadmap();
   const { data: companiesResp } = useCompanies();
 
   const allCompanies: any[] = Array.isArray(companiesResp) ? companiesResp : [];
@@ -247,6 +247,10 @@ function RoadmapContent() {
   };
 
   const activeCompany = companies.find((c) => c.slug === activeSlug) ?? companies[0];
+
+  if (error) {
+    return <ErrorState error={error} title="Couldn't load your roadmap" onRetry={() => mutate()} />;
+  }
 
   if (isLoading) {
     return (

@@ -13,6 +13,7 @@ import {
 } from "recharts";
 import { useCompany } from "@/lib/hooks";
 import { TARGET_ROLES } from "placeprep-backend/src/constants/roles";
+import ErrorState from "@/components/ErrorState";
 
 interface RoundGroup {
   round: string;
@@ -135,7 +136,7 @@ function QuestionRow({ q }: { q: any }) {
 export default function CompanyPage({ params }: { params: Promise<{ name: string }> }) {
   const { name: slug } = use(params);
   
-  const { data: companyRes, isLoading } = useCompany(slug);
+  const { data: companyRes, isLoading, error, mutate } = useCompany(slug);
   // BUG-C8 FIX: fetcher already unwraps .data — companyRes IS the company object directly
   // The old `companyRes?.data ?? companyRes` worked by accident via the 2nd fallback
   const company = companyRes;
@@ -194,6 +195,9 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
     q.targetRoles?.length > 0 ? q.targetRoles.includes(role) : true
   ).length || 0;
 
+  // A failed request used to fall through to "Company not found", which told
+  // the user the company doesn't exist when the request had actually errored.
+  if (error) return <ErrorState error={error} title="Couldn't load company details" onRetry={() => mutate()} />;
   if (isLoading) return <div className="p-8 text-center text-gray-500">Loading company details...</div>;
   if (!company) return <div className="p-8 text-center text-red-500">Company not found</div>;
 

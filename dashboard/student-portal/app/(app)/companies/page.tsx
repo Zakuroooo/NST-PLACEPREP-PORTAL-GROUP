@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Search, ChevronRight, Plus, Check, XCircle } from "lucide-react";
 import { useCompanies, useRoadmap } from "@/lib/hooks";
 import AddToRoadmapModal from "@/components/modals/AddToRoadmapModal";
+import ErrorState from "@/components/ErrorState";
 
 // BUG-FIX B2: corrected labels ("Indian Service" not "Service") and order
 const FILTERS = ["All", "FAANG", "Product", "Service", "Startup"] as const;
@@ -32,7 +33,7 @@ export default function CompaniesPage() {
   useEffect(() => { setVisibleCount(100); }, [activeFilter, search]);
 
   // Real API data
-  const { data: companiesData, isLoading } = useCompanies();
+  const { data: companiesData, isLoading, error, mutate } = useCompanies();
   const { data: roadmapData } = useRoadmap();
 
   // BUG-W3 FIX: fetcher unwraps .data, so companiesData is already the array
@@ -110,6 +111,12 @@ export default function CompaniesPage() {
         ))}
       </div>
 
+      {/* Error state — a failed fetch previously fell through to the empty
+          state below, telling the user "No companies available yet." */}
+      {error && !isLoading && (
+        <ErrorState error={error} title="Couldn't load companies" onRetry={() => mutate()} />
+      )}
+
       {/* Loading state */}
       {isLoading && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -120,11 +127,11 @@ export default function CompaniesPage() {
       )}
 
       {/* Company Grid */}
-      {!isLoading && filtered.length === 0 ? (
+      {!isLoading && !error && filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400 text-sm">
           {search ? `No companies found for "${search}"` : "No companies available yet."}
         </div>
-      ) : !isLoading ? (
+      ) : !isLoading && !error ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filtered.slice(0, visibleCount).map((co) => { // BUG-FIX B1: render only up to visibleCount
             const inRoadmap = roadmapSlugs.includes(co.slug);

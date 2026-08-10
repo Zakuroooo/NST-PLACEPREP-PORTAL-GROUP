@@ -17,12 +17,22 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const auth = await requireStudent(request);
     const { searchParams } = new URL(request.url);
     const batch = searchParams.get('batch') || undefined;
-    // BUG-10 FIX: Read `period` param and derive a date filter for monthly mode
-    const period = searchParams.get('period') || 'alltime';
-    const since: Date | undefined = period === 'monthly'
-      ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+    // The client sends 'alltime' | 'monthly' | 'weekly', but studentService
+    // matches on 'this-week' | 'this-month'. The period was also never passed
+    // through, so every request fell into the unfiltered branch and "Monthly"
+    // returned byte-identical all-time data. Normalize, then forward it.
+    const rawPeriod = searchParams.get('period') || 'alltime';
+    const servicePeriod =
+      rawPeriod === 'monthly' || rawPeriod === 'this-month' ? 'this-month'
+      : rawPeriod === 'weekly' || rawPeriod === 'this-week' ? 'this-week'
       : undefined;
-    const leaderboard = await studentService.getLeaderboard(batch);
+
+    const since: Date | undefined =
+      servicePeriod === 'this-month' ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      : servicePeriod === 'this-week' ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      : undefined;
+
+    const leaderboard = await studentService.getLeaderboard(batch, servicePeriod);
     const withCurrentUser = leaderboard.map(entry => ({
       ...entry,
       isCurrentUser: entry.studentId === auth.userId

@@ -38,7 +38,11 @@ export const onboardingSchema = z.object({
   targetCategories: z.array(
     z.enum(['maang', 'product', 'service', 'startup', 'bfsi', 'other'])
   ).min(1, 'Select at least one company category'),
-  topicSelfRatings: z.record(z.string(), z.number().int().min(1).max(5)),
+  // Ratings are collected on a 1-10 slider (onboarding step3) and roadmap
+  // scoring computes (10 - rating) / 10, so 10 is the correct ceiling here.
+  // This was .max(5), which rejected any rating of 6+ with a 400 and made
+  // onboarding impossible to complete for most inputs.
+  topicSelfRatings: z.record(z.string(), z.number().int().min(1).max(10)),
   targetCompanySlugs: z.array(z.string()).min(1, 'Select at least one target company'),
   prepWeeksCommitted: z.number().int().min(4).max(52),
   targetRole: z.string().min(1).max(100).trim(),

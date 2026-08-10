@@ -10,15 +10,16 @@ import { toast } from "sonner";
 import useSWR, { mutate as globalMutate } from "swr"; // BUG-FIX A2: import globalMutate for XP badge sync
 
 // BUG-T4 FIX: Import completeQuestion mutation
-import { useDashboard, completeQuestion } from "@/lib/hooks";
+import { useDashboard, completeQuestion, fetcher } from "@/lib/hooks";
 
 // BUG-D1 FIX: Replace unauthenticated local fetcher with credentialed one
 // The original `const fetcher = (url) => fetch(url)...` had no credentials,
 // causing /api/experiences to return 401 → expData was always the error JSON, not experiences
-const credFetcher = (url: string) =>
-  fetch(url, { credentials: 'include' })
-    .then(r => r.json())
-    .then(j => j.data ?? j);
+//
+// Now aliased to the shared fetcher in lib/hooks: the local copy had no timeout
+// (a hung request pinned isLoading forever) and no res.ok check, so an error
+// payload was handed to the UI as if it were data.
+const credFetcher = fetcher;
 
 // Prep Score — calculated from real product features only:
 // 1. Practice consistency: problems solved vs. assigned (45%)

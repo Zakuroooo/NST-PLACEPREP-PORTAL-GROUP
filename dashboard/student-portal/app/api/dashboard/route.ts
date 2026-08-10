@@ -33,14 +33,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     await connectDB();
     const user = await requireStudent(request);
 
-    // Get stats (xpTotal, streak, problemsSolved, prepScore, weeklyActivity, latestActivity)
-    const stats = await studentService.getStats(user.userId);
-
-    // BUG-D2 FIX: Get fullName from student profile
-    const profile = await studentRepository.findByUserId(user.userId);
-
-    // Get roadmaps for company card section
-    const roadmapDocs = await roadmapRepository.findByStudentId(user.userId);
+    // These three reads are independent, so they run concurrently rather than
+    // as three sequential round-trips.
+    //   stats   — xpTotal, streak, problemsSolved, prepScore, weeklyActivity
+    //   profile — fullName (BUG-D2)
+    //   roadmapDocs — company card section
+    const [stats, profile, roadmapDocs] = await Promise.all([
+      studentService.getStats(user.userId),
+      studentRepository.findByUserId(user.userId),
+      roadmapRepository.findByStudentId(user.userId),
+    ]);
 
     // BUG-T1 FIX: For each roadmap, fetch today's questions from the active week
     const roadmaps = await Promise.all(roadmapDocs.map(async (r) => {
@@ -53,8 +55,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         try {
           const topicLabel = activeWeek.topicLabel as string;
 
-          console.log(`[DASHBOARD DEBUG] company=${r.companySlug} topicLabel="${topicLabel}" weeks=${r.weeks?.length}`);
-
           // Try 1: exact topic match (works when topicLabel === question's topic string)
           let result = await questionRepository.findMany({
             companySlug: r.companySlug,
@@ -62,8 +62,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             limit: 20,
           });
           let questions = result?.questions ?? [];
-
-          console.log(`[DASHBOARD DEBUG] topic match count=${questions.length}`);
 
           // Try 2: if exact match returns nothing, try any questions for this company
           // (topicLabel may not match DB topics — e.g. "Arrays" vs "array")
@@ -73,7 +71,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
               limit: 20,
             });
             questions = fallback?.questions ?? fallback ?? [];
-            console.log(`[DASHBOARD DEBUG] fallback (no topic) count=${questions.length} for companySlug="${r.companySlug}"`);
           }
 
           // Get IDs of questions already completed by this student for this company
@@ -85,7 +82,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
           // Show only incomplete questions, capped at 5
           const incompleteQs = (questions as any[]).filter((q: any) => !completedSet.has(q._id.toString()));
-          console.log(`[DASHBOARD DEBUG] incomplete count=${incompleteQs.length}`);
           todayQs = incompleteQs.slice(0, 5).map((q: any) => ({
             id:          q._id.toString(),
             title:       q.problemSummary,
@@ -94,11 +90,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             leetcodeUrl: q.leetcodeUrl ?? null,
           }));
         } catch (err: any) {
-          console.error(`[DASHBOARD DEBUG] error for ${r.companySlug}:`, err?.message);
+          console.error(`[dashboard] question lookup failed for ${r.companySlug}:`, err?.message);
           todayQs = [];
         }
-      } else {
-        console.log(`[DASHBOARD DEBUG] NO activeWeek for company=${r.companySlug} weeks=${JSON.stringify((r.weeks ?? []).map((w: any) => ({ num: w.weekNumber, status: w.status })))}`);
       }
 
       // Compute current day within the week from doneQuestions

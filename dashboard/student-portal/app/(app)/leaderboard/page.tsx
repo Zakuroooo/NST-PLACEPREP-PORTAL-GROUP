@@ -3,6 +3,7 @@ import { useState } from "react";
 import { TrendingUp, Zap, Medal, ChevronDown, Search, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useLeaderboard } from "@/lib/hooks";
+import ErrorState from "@/components/ErrorState";
 
 interface LeaderEntry {
   rank: number;
@@ -21,7 +22,7 @@ export default function LeaderboardPage() {
   const VISIBLE_LIMIT = 20;
 
   // BUG-E FIX: Use SWR hook instead of raw fetch + useEffect
-  const { data: rawData, isLoading } = useLeaderboard({ period });
+  const { data: rawData, isLoading, error, mutate } = useLeaderboard({ period });
 
   function getInitialsLocal(name: string) {
     return name.split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
@@ -127,7 +128,9 @@ export default function LeaderboardPage() {
       </div>
 
       {leaders.length === 0 ? (
-        isLoading ? (
+        error ? (
+          <ErrorState error={error} title="Couldn't load the leaderboard" onRetry={() => mutate()} />
+        ) : isLoading ? (
           <div className="flex flex-col items-center justify-center py-12">
             <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-3" />
             <div className="text-gray-400 text-sm">Loading leaderboard...</div>
@@ -137,11 +140,15 @@ export default function LeaderboardPage() {
         )
       ) : (
         <div className="relative">
+          {/* Non-blocking refresh indicator. This used to be an `absolute inset-0`
+              overlay with a backdrop blur, so every background revalidation (and
+              every period switch) covered the table the user was already reading
+              and swallowed their clicks. Now it floats out of the way. */}
           {isLoading && (
-            <div className="absolute inset-0 bg-white/60 z-10 flex items-start justify-center pt-20 backdrop-blur-[1px]">
-              <div className="flex items-center gap-3 bg-white px-5 py-2.5 rounded-full shadow-lg border border-gray-100">
-                <div className="w-5 h-5 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-                <span className="text-sm font-semibold text-gray-700">Updating...</span>
+            <div className="sticky top-16 z-10 flex justify-center pointer-events-none">
+              <div className="flex items-center gap-2 bg-white px-4 py-1.5 rounded-full shadow-md border border-gray-100">
+                <div className="w-3.5 h-3.5 border-2 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+                <span className="text-xs font-semibold text-gray-600">Updating...</span>
               </div>
             </div>
           )}

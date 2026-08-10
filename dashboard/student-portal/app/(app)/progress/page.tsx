@@ -4,6 +4,7 @@ import Link from "next/link"; // BUG-FIX D1: for clickable company name links
 import { useRouter } from "next/navigation";
 import { TrendingUp, Flame, Trophy, Zap, AlertCircle } from "lucide-react";
 import { useProgress, useDashboard, useRoadmap } from "@/lib/hooks";
+import ErrorState from "@/components/ErrorState";
 
 // The components will use API data directly below
 
@@ -58,9 +59,9 @@ function getHeatColor(level: number) {
 export default function ProgressPage() {
   const router = useRouter();
   
-  const { data: dashboardData, isLoading: loadingDash } = useDashboard();
-  const { data: roadmapsData, isLoading: loadingRoadmaps } = useRoadmap();
-  const { data: progressData, isLoading: loadingProgress } = useProgress();
+  const { data: dashboardData, isLoading: loadingDash, error: errorDash, mutate: retryDash } = useDashboard();
+  const { data: roadmapsData, isLoading: loadingRoadmaps, error: errorRoadmaps, mutate: retryRoadmaps } = useRoadmap();
+  const { data: progressData, isLoading: loadingProgress, error: errorProgress, mutate: retryProgress } = useProgress();
 
   // FIX: dashboardData = { student, stats, roadmaps, recentActivity }
   // All KPI fields (problemsSolved, xpTotal, streak, etc.) live inside dashboardData.stats
@@ -146,6 +147,23 @@ export default function ProgressPage() {
     color: t.textColor,
     bgColor: bgColors[idx % bgColors.length]
   }));
+
+  // Error branch — previously a failed fetch on any of these three hooks left
+  // the page on the spinner below forever, with no way to recover or see why.
+  const firstError = errorDash ?? errorRoadmaps ?? errorProgress;
+  if (firstError) {
+    return (
+      <ErrorState
+        error={firstError}
+        title="Couldn't load your progress"
+        onRetry={() => {
+          if (errorDash) retryDash();
+          if (errorRoadmaps) retryRoadmaps();
+          if (errorProgress) retryProgress();
+        }}
+      />
+    );
+  }
 
   if (loadingDash || loadingRoadmaps || loadingProgress) {
     return <div className="p-8 text-center text-gray-500">Loading progress...</div>;

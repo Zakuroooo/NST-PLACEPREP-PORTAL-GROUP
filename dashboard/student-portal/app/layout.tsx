@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
+import { SWRProvider } from "@/lib/swr-provider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -30,7 +31,7 @@ export default function RootLayout({
       </head>
       <body className="antialiased" suppressHydrationWarning>
         <Toaster position="top-right" richColors closeButton />
-        {children}
+        <SWRProvider>{children}</SWRProvider>
       </body>
     </html>
   );

@@ -13,6 +13,7 @@ const IconMap: Record<string, React.ElementType> = {
 
 import { usePractice, useCompanies, usePracticeCategories, useTopics } from "@/lib/hooks";
 import { type Difficulty } from "@/lib/constants";
+import ErrorState from "@/components/ErrorState";
 
 // ── Category config (display metadata keyed by questionType) ─────────────────
 interface CategoryConfig {
@@ -120,7 +121,7 @@ function PracticeContent() {
   }, [activeQType]);
 
   // Categories — dynamic from /api/practice/categories
-  const { data: categoriesData } = usePracticeCategories();
+  const { data: categoriesData, isLoading: loadingCategories, error: errorCategories, mutate: retryCategories } = usePracticeCategories();
   const categories: { questionType: string; count: number }[] =
     Array.isArray(categoriesData) ? categoriesData : [];
 
@@ -132,7 +133,7 @@ function PracticeContent() {
     : null;
 
   // Questions — only fetch when a category is selected
-  const { data: practiceData } = usePractice({
+  const { data: practiceData, isLoading: loadingQuestions, error: errorQuestions, mutate: retryQuestions } = usePractice({
     topic,
     difficulty,
     company,
@@ -203,19 +204,25 @@ function PracticeContent() {
 
       {/* Category Grid — dynamic from API */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
-        {categories.length === 0
-          ? [...Array(4)].map((_, i) => (
-              <div key={i} className="h-36 bg-gray-100 rounded-2xl animate-pulse" />
-            ))
-          : categories.map((cat) => (
-              <CategoryCard
-                key={cat.questionType}
-                questionType={cat.questionType}
-                count={cat.count}
-                active={activeQType === cat.questionType}
-                onClick={() => handleSelectCategory(cat.questionType)}
-              />
-            ))}
+        {errorCategories ? (
+          <div className="col-span-full">
+            <ErrorState error={errorCategories} title="Couldn't load practice categories" onRetry={() => retryCategories()} />
+          </div>
+        ) : loadingCategories && categories.length === 0 ? (
+          [...Array(4)].map((_, i) => (
+            <div key={i} className="h-36 bg-gray-100 rounded-2xl animate-pulse" />
+          ))
+        ) : (
+          categories.map((cat) => (
+            <CategoryCard
+              key={cat.questionType}
+              questionType={cat.questionType}
+              count={cat.count}
+              active={activeQType === cat.questionType}
+              onClick={() => handleSelectCategory(cat.questionType)}
+            />
+          ))
+        )}
       </div>
 
       {/* Question list panel — shown when a category is selected */}
@@ -319,8 +326,23 @@ function PracticeContent() {
             </button>
           </div>
 
-          {/* Question rows */}
-          {filteredQuestions.length === 0 ? (
+          {/* Question rows.
+              These three branches used to be one: an empty list rendered "No
+              questions found" whether the fetch was still in flight, had failed,
+              or had genuinely returned nothing. Loading and error are now
+              distinct from empty. */}
+          {errorQuestions ? (
+            <ErrorState error={errorQuestions} title="Couldn't load questions" onRetry={() => retryQuestions()} />
+          ) : loadingQuestions && filteredQuestions.length === 0 ? (
+            <div className="divide-y divide-gray-50">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="px-5 py-4">
+                  <div className="h-4 w-2/3 bg-gray-100 rounded animate-pulse" />
+                  <div className="h-3 w-1/3 bg-gray-50 rounded animate-pulse mt-2" />
+                </div>
+              ))}
+            </div>
+          ) : filteredQuestions.length === 0 ? (
             <div className="py-16 text-center text-gray-400">
               <div className="flex justify-center mb-3 text-gray-300">
                 <SearchX className="w-12 h-12" />
