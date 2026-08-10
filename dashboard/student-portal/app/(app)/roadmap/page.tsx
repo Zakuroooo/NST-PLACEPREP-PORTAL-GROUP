@@ -174,25 +174,39 @@ function RoadmapContent() {
   // The old triple-unwrap (data?.data?.roadmaps ?? data?.roadmaps ?? data) was fragile.
   const companies: UserRoadmapCompany[] = (
     (Array.isArray(roadmapData) ? roadmapData : []) as any[]
-  ).map((r: any) => ({
-    slug: r.companySlug,
-    name: r.companyName,
-    initial: r.companyName?.charAt(0) || "?",
-    color: "from-blue-500/20 to-blue-500/5",
-    role: r.roleName,
-    totalWeeks: r.weeksCommitted ?? 12,
-    currentWeek: r.currentWeek ?? 1,
-    pctComplete: r.pctComplete ?? 0,
-    roadmapId: r._id?.toString() ?? r.roadmapId ?? undefined,  // FIX: preserve DB _id for completeQuestion
-    weeks: (r.weeks || r.tasks || []).map((w: any) => ({
-      weekNum: w.weekNumber || w.weekNum,
-      topic: w.topicLabel || w.topic,
-      totalQuestions: w.totalQuestions ?? 5,
-      doneQuestions: w.doneQuestions ?? 0,
-      status: w.status || "active",
-      questions: w.questions || [],
-    })),
-  }));
+  ).map((r: any) => {
+    // Deduplicate questionIds across weeks at read time.
+    // Old roadmaps (built with Promise.all) may have the same question stored in
+    // multiple weeks. We strip duplicates here so WeekQuestions can use the stored
+    // IDs directly — first week that claims a question wins.
+    const seenIds = new Set<string>();
+    const weeks = (r.weeks || r.tasks || []).map((w: any) => {
+      const allIds = (w.questionIds || []).map((id: any) => id.toString());
+      const uniqueIds = allIds.filter((id: string) => !seenIds.has(id));
+      uniqueIds.forEach((id: string) => seenIds.add(id));
+      return {
+        weekNum: w.weekNumber || w.weekNum,
+        topic: w.topicLabel || w.topic,
+        totalQuestions: w.totalQuestions ?? 5,
+        doneQuestions: w.doneQuestions ?? 0,
+        status: w.status || "active",
+        questions: w.questions || [],
+        questionIds: uniqueIds,
+      };
+    });
+    return {
+      slug: r.companySlug,
+      name: r.companyName,
+      initial: r.companyName?.charAt(0) || "?",
+      color: "from-blue-500/20 to-blue-500/5",
+      role: r.roleName,
+      totalWeeks: r.weeksCommitted ?? 12,
+      currentWeek: r.currentWeek ?? 1,
+      pctComplete: r.pctComplete ?? 0,
+      roadmapId: r._id?.toString() ?? r.roadmapId ?? undefined,
+      weeks,
+    };
+  });
 
   const initialSlug = searchParams.get("company") ?? companies[0]?.slug ?? "";
   const [activeSlug, setActiveSlug] = useState(initialSlug);
@@ -346,16 +360,26 @@ function WeekQuestions({
   totalQuestions,
   weeksCommitted,
   roadmapId,
+  questionIds = [],
 }: {
   companySlug: string;
   topic: string;
   totalQuestions: number;
   weeksCommitted: number;
   roadmapId?: string;
+  questionIds?: string[];
 }) {
   const minFrequency = weeksCommitted <= 4 ? 0.6 : weeksCommitted <= 6 ? 0.4 : weeksCommitted <= 8 ? 0.25 : weeksCommitted <= 12 ? 0.1 : 0;
   const limit = totalQuestions || 10;
-  const key = `/api/roadmap/week-questions?company=${companySlug}&topic=${encodeURIComponent(topic)}&limit=${limit}&minFrequency=${minFrequency}`;
+
+  // When the stored roadmap has question IDs, fetch those specific questions.
+  // This guarantees each week shows exactly its assigned questions, with no
+  // cross-week duplicates. Fall back to topic+frequency query only when IDs
+  // are absent (very old roadmaps predating BUG-R10).
+  const hasStoredIds = questionIds.length > 0;
+  const key = hasStoredIds
+    ? `/api/roadmap/week-questions?ids=${[...questionIds].sort().join(',')}`
+    : `/api/roadmap/week-questions?company=${companySlug}&topic=${encodeURIComponent(topic)}&limit=${limit}&minFrequency=${minFrequency}`;
   const { data: weekData, isLoading } = useSWR(key, fetcher);
 
   // Completed-questions: drives green checkmarks and persists across refresh
@@ -415,9 +439,12 @@ function WeekQuestions({
                   });
                   if (!res.ok) throw new Error('Failed to mark complete');
                   const resJson = await res.json().catch(() => ({}));
-                  // Show XP toast only if this is a fresh completion (not already done)
+                  // Show XP toast only if this is a fresh completion (not already done).
+                  // Use the server-returned xpEarned (based on difficulty) rather than
+                  // the client-computed xp (based on xpValue field) — they can differ.
                   if (!resJson?.data?.alreadyCompleted) {
-                    toast.success(`+${xp} XP earned!`, { duration: 2000 });
+                    const earned = resJson?.data?.xpEarned ?? xp;
+                    toast.success(`+${earned} XP earned!`, { duration: 2000 });
                   }
                   // Revalidate so green checkmarks persist on next visit
                   await mutateCompleted();
@@ -626,6 +653,7 @@ function RoadmapCurriculumView({ company }: { company: UserRoadmapCompany }) {
                     totalQuestions={week.totalQuestions}
                     weeksCommitted={company.totalWeeks}
                     roadmapId={company.roadmapId}
+                    questionIds={week.questionIds ?? []}
                   />
                 </div>
               )}

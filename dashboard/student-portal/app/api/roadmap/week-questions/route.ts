@@ -24,6 +24,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     await requireStudent(request);
 
     const { searchParams } = new URL(request.url);
+    const idsParam = searchParams.get('ids');
+
+    // When the roadmap has stored question IDs, fetch those specific questions.
+    // This is the primary path — it guarantees each week shows exactly the set
+    // assigned during roadmap generation (no cross-week duplicates possible).
+    if (idsParam) {
+      const ids = idsParam.split(',').filter(Boolean).slice(0, 30);
+      const questions = await questionRepository.findByIds(ids);
+      return successResponse({ questions, total: questions.length });
+    }
+
+    // Fallback: topic + frequency query for old roadmaps with no stored IDs.
     const companySlug = searchParams.get('company');
     const topic = searchParams.get('topic');
     const limitParam = Number(searchParams.get('limit')) || 15;

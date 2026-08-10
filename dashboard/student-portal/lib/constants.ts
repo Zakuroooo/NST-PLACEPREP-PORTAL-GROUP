@@ -86,6 +86,8 @@ export interface RoadmapWeek {
   doneQuestions: number;
   status: "done" | "active" | "locked";
   questions: { id: number | string; title: string; diff: Difficulty; xp: number; leetcodeUrl?: string; done?: boolean }[];
+  /** IDs of questions assigned to this week — deduped across weeks at read time */
+  questionIds?: string[];
 }
 
 export interface UserRoadmapCompany {
