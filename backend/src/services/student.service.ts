@@ -7,6 +7,7 @@ import { studentRepository } from '../repositories/student.repository';
 import { roadmapRepository } from '../repositories/roadmap.repository';
 import { companyRepository } from '../repositories/company.repository';
 import { questionRepository } from '../repositories/question.repository';
+import { roadmapService } from './roadmap.service';
 import { notificationRepository } from '../repositories/notification.repository';
 import { doubtRepository } from '../repositories/doubt.repository';
 import { sessionRepository } from '../repositories/session.repository';
@@ -62,15 +63,15 @@ export const studentService = {
       }),
     ]);
 
-    // Calculate prep score: weighted blend of XP, problems solved, streak
-    const prepScore = Math.min(
-      100,
-      Math.round(
-        (profile.xpTotal / 1500) * 40 +
-          (problemsSolved / 80) * 40 +
-          (profile.currentStreakDays / 30) * 20
-      )
+    // BUG-FIX A3: align prepScore formula with frontend breakdown bars (single source of truth)
+    // old formula used different denominators (1500 XP, 80 problems) causing ring vs. bars mismatch
+    const totalAssigned = roadmaps.reduce(
+      (sum, r) => sum + (r.weeks ?? []).reduce((s, w) => s + (w.totalQuestions ?? 0), 0), 0
     );
+    const practiceScore = Math.min((problemsSolved / Math.max(totalAssigned, 1)) * 100, 100) * 0.45;
+    const streakScore   = Math.min((profile.currentStreakDays / 30) * 100, 100) * 0.30;
+    const xpScore       = Math.min((profile.xpTotal / 5000) * 100, 100) * 0.25;
+    const prepScore     = Math.round(practiceScore + streakScore + xpScore);
 
     // 30-day activity chart
     const thirtyDaysAgo = new Date();
@@ -154,26 +155,14 @@ export const studentService = {
       );
       if (existing) continue;
 
-      // Generate week structure based on topicFrequency
+      // Phase 2: unified week builder — self-ratings affect order; questionIds populated
       const totalWeeks = data.prepWeeksCommitted;
-      const weeks = company.topicFrequency.slice(0, totalWeeks).map((tf, i) => ({
-        weekNumber: i + 1,
-        topicLabel: tf.topicName,
-        totalQuestions: Math.max(5, Math.round(tf.questionCount / 4)),
-        doneQuestions: 0,
-        status: (i === 0 ? 'active' : 'locked') as 'active' | 'locked',
-      }));
-
-      // Fill remaining weeks with "Practice" if fewer topics than weeks
-      while (weeks.length < totalWeeks) {
-        weeks.push({
-          weekNumber: weeks.length + 1,
-          topicLabel: 'Mixed Practice',
-          totalQuestions: 5,
-          doneQuestions: 0,
-          status: 'locked',
-        });
-      }
+      const weeks = await roadmapService.buildWeeks({
+        companySlug: company.slug,
+        targetRole: data.targetRole,
+        prepWeeks: totalWeeks,
+        topicSelfRatings: data.topicSelfRatings,
+      });
 
       await roadmapRepository.create({
         studentId: new mongoose.Types.ObjectId(userId),
@@ -181,26 +170,21 @@ export const studentService = {
         companySlug: company.slug,
         companyName: company.name,
         companyLogoUrl: company.logoUrl,
-        roleName: 'Software Engineer',
-        weeksCommitted: totalWeeks,
+        roleName: data.targetRole,
+        weeksCommitted: weeks.length,
         currentWeek: 1,
         pctComplete: 0,
         isActive: true,
         weeks,
+        selfRatingsSnapshot: new Map(Object.entries(data.topicSelfRatings)),
       } as never);
     }
 
     // XP reward for completing onboarding
     await studentRepository.addXp(userId, 100);
-    await notificationRepository.create({
-      userId,
-      type: 'xp',
-      title: '+100 XP — Onboarding Complete!',
-      subtitle: `Your roadmap${companies.length > 1 ? 's are' : ' is'} ready. Start practicing!`,
-      iconName: 'Zap',
-    });
+    // BUG-FIX F2: removed 'xp' bell notification — XP feedback is toast-only
 
-    return { success: true };
+    return { success: true, xpAwarded: 100 }; // BUG-FIX F2
   },
 
   async completeQuestion(
@@ -386,13 +370,22 @@ export const studentService = {
 
   /**
    * Topic-wise question completion percentage.
+   * BUG-FIX D2: accepts optional companySlugs to scope denominators to the student's roadmap
    * Returns an array like: [{ topic, completed, total, percentage }]
    */
-  async getTopicProgress(userId: string) {
+  async getTopicProgress(userId: string, companySlugs?: string[]) {
+    // BUG-FIX D2: if student has no roadmap companies, return empty immediately
+    if (companySlugs !== undefined && companySlugs.length === 0) return [];
+
     const studentObjId = new mongoose.Types.ObjectId(userId);
+    const slugFilter = companySlugs?.length
+      ? [{ $match: { companySlug: { $in: companySlugs } } }]
+      : [];
 
     // Aggregate completions by topic via lookup
     const result = await QuestionCompletion.aggregate([
+      // BUG-FIX D2: filter completions to roadmap companies first (no extra DB round-trip)
+      ...slugFilter,
       { $match: { studentId: studentObjId } },
       {
         $lookup: {
@@ -412,10 +405,12 @@ export const studentService = {
       },
     ]);
 
-    // Get total questions per topic
+    // Get total questions per topic — BUG-FIX D2: scoped to roadmap company slugs
     const totals = await QuestionCompletion.db
       .collection('questions')
       .aggregate([
+        // BUG-FIX D2: filter to roadmap companies so denominator reflects only assigned questions
+        ...(slugFilter.length ? [{ $match: { companySlug: { $in: companySlugs } } }] : []),
         { $unwind: '$topics' },
         { $group: { _id: '$topics', total: { $sum: 1 } } },
       ])
