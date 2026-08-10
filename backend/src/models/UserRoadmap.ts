@@ -19,8 +19,15 @@ interface IRoadmapWeek {
   totalQuestions: number;
   doneQuestions: number;
   status: WeekStatus;
-  // BUG-R10 FIX: track which question IDs belong to this week
   questionIds: mongoose.Types.ObjectId[];
+  // --- Phase 1: personalization audit trail ---
+  rationaleScore: number; // frequencyPct * (10 - selfRating) / 10
+  questionBreakdown: {
+    dsa: number;
+    aptitude: number;
+    coreCs: number;
+    hr: number;
+  };
 }
 
 export interface IUserRoadmap extends Document {
@@ -36,6 +43,8 @@ export interface IUserRoadmap extends Document {
   pctComplete: number;
   isActive: boolean;
   weeks: IRoadmapWeek[];
+  // --- Phase 1: personalization audit trail ---
+  selfRatingsSnapshot: Map<string, number>; // ratings at generation time
   lastActive?: Date;
   isSeeded?: boolean;
   addedAt?: Date;
@@ -52,11 +61,21 @@ const RoadmapWeekSchema = new Schema<IRoadmapWeek>(
       enum: ['done', 'active', 'locked'],
       default: 'locked',
     },
-    // BUG-R10 FIX: array of ObjectIds for questions assigned to this week
     questionIds: {
       type: [Schema.Types.ObjectId],
       ref: 'Question',
       default: [],
+    },
+    // --- Phase 1: personalization audit trail per week ---
+    rationaleScore: { type: Number, default: 0 },
+    questionBreakdown: {
+      type: {
+        dsa: { type: Number, default: 0 },
+        aptitude: { type: Number, default: 0 },
+        coreCs: { type: Number, default: 0 },
+        hr: { type: Number, default: 0 },
+      },
+      default: {},
     },
   },
   { _id: false }
@@ -84,7 +103,8 @@ const UserRoadmapSchema = new Schema<IUserRoadmap>(
     pctComplete: { type: Number, default: 0, min: 0, max: 100 },
     isActive: { type: Boolean, default: true },
     weeks: { type: [RoadmapWeekSchema], default: [] },
-    // BUG-PR2 FIX: null until student first interacts with this roadmap
+    // --- Phase 1: self-ratings at the time this roadmap was generated ---
+    selfRatingsSnapshot: { type: Map, of: Number, default: {} },
     lastActive: { type: Date, default: null },
     isSeeded: { type: Boolean, default: false },
     addedAt: { type: Date, default: Date.now },

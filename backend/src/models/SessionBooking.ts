@@ -17,7 +17,7 @@ export interface ISessionBooking extends Document {
   notes?: string;
   requestedDate: string;                 // ISO date string YYYY-MM-DD
   requestedTime: string;                 // HH:mm
-  durationMin: 30 | 60;
+  durationMin: number; // BUG-FIX C2: was 30 | 60 — now any integer 15–120
   status: SessionStatus;
   meetLink?: string;                     // Jitsi Meet URL
   proposedDate?: string;
@@ -61,8 +61,10 @@ const SessionBookingSchema = new Schema<ISessionBooking>(
     },
     durationMin: {
       type: Number,
-      enum: [30, 60],
-      required: [true, 'Duration must be 30 or 60 minutes'],
+      // BUG-FIX C2: allow 15–120 min range (was enum: [30, 60] which MongoDB enforced strictly)
+      min: [15, 'Duration must be at least 15 minutes'],
+      max: [120, 'Duration cannot exceed 120 minutes'],
+      required: [true, 'Please choose a duration'],
     },
     status: {
       type: String,

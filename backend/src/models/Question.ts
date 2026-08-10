@@ -27,6 +27,12 @@ export const TARGET_ROLES = [
 
 export type TargetRole = typeof TARGET_ROLES[number];
 
+export const QUESTION_TYPES = [
+  'dsa', 'aptitude_mcq', 'core_cs_mcq', 'system_design',
+  'lld', 'hr_behavioral', 'domain_specific',
+] as const;
+export type QuestionType = typeof QUESTION_TYPES[number];
+
 export interface IQuestion extends Document {
   _id: mongoose.Types.ObjectId;
   companyId: mongoose.Types.ObjectId; // ref: Company
@@ -52,9 +58,27 @@ export interface IQuestion extends Document {
   isHot: boolean;
   verified: boolean;
   isSeeded?: boolean;
-  // BUG-M7 FIX: interviewYear enables real trend data per topic per year.
-  // E.g. 2024 had more System Design than 2022. Populate when scraping.
   interviewYear?: number;
+  // --- Phase 1: Question type system ---
+  questionType: QuestionType;
+  isMcq: boolean;
+  options: Array<{ label: string; text: string; isCorrect: boolean }>;
+  explanation?: string;
+  sampleAnswer?: string;
+  keyPoints: string[];
+  hints: string[];
+  followUpQuestions: string[];
+  subTopic?: string;
+  sqlQuery?: string;
+  datasetContext?: string;
+  // --- Phase 1: Source tracking (for scraping pipeline) ---
+  sourceId?: number;
+  sourcePriority?: number;
+  isCanonical: boolean;
+  isDuplicate: boolean;
+  canonicalId?: mongoose.Types.ObjectId;
+  cautionSource: boolean;
+  manuallyCurated: boolean;
   createdAt: Date;
 }
 
@@ -113,8 +137,36 @@ const QuestionSchema = new Schema<IQuestion>(
     isHot: { type: Boolean, default: false },
     verified: { type: Boolean, default: false },
     isSeeded: { type: Boolean, default: false },
-    // BUG-M7 FIX: year the question was asked in an interview — enables real Trends tab data
     interviewYear: { type: Number, min: 2015, max: 2030 },
+    // --- Phase 1: Question type system ---
+    questionType: {
+      type: String,
+      enum: QUESTION_TYPES,
+      default: 'dsa',
+      index: true,
+    },
+    isMcq: { type: Boolean, default: false },
+    options: {
+      type: [{ label: String, text: String, isCorrect: Boolean }],
+      default: [],
+      _id: false,
+    },
+    explanation: { type: String },
+    sampleAnswer: { type: String },
+    keyPoints: { type: [String], default: [] },
+    hints: { type: [String], default: [] },
+    followUpQuestions: { type: [String], default: [] },
+    subTopic: { type: String, index: true },
+    sqlQuery: { type: String },
+    datasetContext: { type: String },
+    // --- Phase 1: Source tracking ---
+    sourceId: { type: Number },
+    sourcePriority: { type: Number },
+    isCanonical: { type: Boolean, default: true },
+    isDuplicate: { type: Boolean, default: false },
+    canonicalId: { type: Schema.Types.ObjectId, ref: 'Question' },
+    cautionSource: { type: Boolean, default: false },
+    manuallyCurated: { type: Boolean, default: false },
   },
   {
     timestamps: { createdAt: true, updatedAt: false },

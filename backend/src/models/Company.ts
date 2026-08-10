@@ -17,6 +17,8 @@ interface IRoundStructure {
   roundType: RoundType;
   typicalDurationMin?: number;
   description?: string;
+  /** Derived from verified question distribution — absent for companies below the ≥10q/≥2-round threshold */
+  percentage?: number;
 }
 
 interface ITopicFrequency {
@@ -30,6 +32,29 @@ interface IDifficultyDistribution {
   Easy: number;
   Medium: number;
   Hard: number;
+}
+
+// --- Phase 1: Role-aware topic frequency ---
+interface IRoleTopicEntry {
+  topicSlug: string;
+  topicName: string;
+  frequencyPct: number;
+  roundType: string;
+  questionCount: number;
+}
+
+interface IRoleTopicFrequency {
+  roleName: string;
+  topics: IRoleTopicEntry[];
+}
+
+interface IQuestionTypeDistribution {
+  dsa: number;
+  aptitude: number;
+  coreCs: number;
+  systemDesign: number;
+  hr: number;
+  domainSpecific: number;
 }
 
 export interface ICompany extends Document {
@@ -48,6 +73,9 @@ export interface ICompany extends Document {
   roundStructure: IRoundStructure[];
   topicFrequency: ITopicFrequency[];
   difficultyDistribution: IDifficultyDistribution;
+  // --- Phase 1: Role-aware topic frequency (kept alongside topicFrequency for backward compat) ---
+  roleTopicFrequency: IRoleTopicFrequency[];
+  questionTypeDistribution: IQuestionTypeDistribution;
   lastSyncedAt?: Date;
   isSeeded?: boolean;
   createdAt: Date;
@@ -64,6 +92,7 @@ const RoundStructureSchema = new Schema<IRoundStructure>(
     },
     typicalDurationMin: { type: Number },
     description: { type: String },
+    percentage: { type: Number, min: 0, max: 100 },
   },
   { _id: false }
 );
@@ -74,6 +103,25 @@ const TopicFrequencySchema = new Schema<ITopicFrequency>(
     topicName: { type: String, required: true },
     frequencyPct: { type: Number, required: true, min: 0, max: 100 },
     questionCount: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const RoleTopicEntrySchema = new Schema<IRoleTopicEntry>(
+  {
+    topicSlug: { type: String, required: true },
+    topicName: { type: String, required: true },
+    frequencyPct: { type: Number, required: true, min: 0, max: 100 },
+    roundType: { type: String },
+    questionCount: { type: Number, default: 0 },
+  },
+  { _id: false }
+);
+
+const RoleTopicFrequencySchema = new Schema<IRoleTopicFrequency>(
+  {
+    roleName: { type: String, required: true },
+    topics: { type: [RoleTopicEntrySchema], default: [] },
   },
   { _id: false }
 );
@@ -121,6 +169,19 @@ const CompanySchema = new Schema<ICompany>(
         Hard: { type: Number, default: 0 },
       },
       default: { Easy: 33, Medium: 47, Hard: 20 },
+    },
+    // --- Phase 1: Role-aware topic frequency (backward-compat: topicFrequency[] kept untouched) ---
+    roleTopicFrequency: { type: [RoleTopicFrequencySchema], default: [] },
+    questionTypeDistribution: {
+      type: {
+        dsa: { type: Number, default: 0 },
+        aptitude: { type: Number, default: 0 },
+        coreCs: { type: Number, default: 0 },
+        systemDesign: { type: Number, default: 0 },
+        hr: { type: Number, default: 0 },
+        domainSpecific: { type: Number, default: 0 },
+      },
+      default: {},
     },
     lastSyncedAt: { type: Date },
     isSeeded: { type: Boolean, default: false },

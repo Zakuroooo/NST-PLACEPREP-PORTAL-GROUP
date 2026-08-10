@@ -17,6 +17,11 @@ export { default as Notification } from './Notification';
 export { default as InterviewExperience } from './InterviewExperience';
 export { default as FacultyInvite } from './FacultyInvite';
 export { default as Message } from './Message';
+// --- Phase 1: new models ---
+export { default as Topic } from './Topic';
+export { default as CurriculumTopic } from './CurriculumTopic';
+export { default as Skill } from './Skill';
+export { default as PlacementRecord } from './PlacementRecord';
 
 // Re-export interfaces
 export type { IUser } from './User';
@@ -31,3 +36,9 @@ export type { ISessionBooking } from './SessionBooking';
 export type { INotification } from './Notification';
 export type { IInterviewExperience } from './InterviewExperience';
 export type { IFacultyInvite } from './FacultyInvite';
+// --- Phase 1: new model interfaces ---
+export type { ITopic } from './Topic';
+export type { ICurriculumTopic } from './CurriculumTopic';
+export type { ISkill } from './Skill';
+export type { IPlacementRecord } from './PlacementRecord';
+export type { QuestionType, QUESTION_TYPES } from './Question';
