@@ -16,7 +16,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
     await connectDB();
     const user = await requireStudent(request);
-    const notifications = await notificationService.getUserNotifications(user.userId);
+    const notifications = await notificationService.getUserNotifications(user.userId, ['session', 'doubt']); // BUG-FIX F1
     const unreadCount = notifications.filter((n) => !n.isRead).length;
     return successResponse({ notifications, unreadCount });
   } catch (error) {

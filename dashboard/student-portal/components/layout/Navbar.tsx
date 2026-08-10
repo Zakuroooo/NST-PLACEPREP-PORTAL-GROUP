@@ -1,30 +1,10 @@
 "use client";
-import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Bell, Zap, Search, X, Building2, Tag, Menu } from "lucide-react";
+import { Bell, Zap, Menu } from "lucide-react";
 import { useNavbar } from "@/lib/navbar-context";
-import { useCompanies, useProfile } from "@/lib/hooks";
+import { useProfile } from "@/lib/hooks";
 
-export interface SearchResult {
-  type: "company" | "topic";
-  label: string;
-  subtitle: string;
-  href: string;
-  slug?: string;
-  color?: string;
-  initial?: string;
-}
-
-const STATIC_TOPICS: SearchResult[] = [
-  { type: "topic", label: "Arrays & Strings", subtitle: "89% of Google interviews", href: "/practice?topic=Arrays" },
-  { type: "topic", label: "DP", subtitle: "76% of FAANG interviews", href: "/practice?topic=DP" },
-  { type: "topic", label: "System Design (HLD)", subtitle: "Critical for SDE-2 roles", href: "/practice?roundType=System+Design" },
-  { type: "topic", label: "LLD / Low Level Design", subtitle: "Flipkart, Microsoft", href: "/practice?roundType=LLD" },
-  { type: "topic", label: "Graphs & BFS/DFS", subtitle: "71% of Google interviews", href: "/practice?topic=Graphs" },
-  { type: "topic", label: "Aptitude", subtitle: "TCS NQT, Infosys Spectra", href: "/practice?roundType=Aptitude" },
-  { type: "topic", label: "HR / Behavioral", subtitle: "All companies", href: "/practice?roundType=HR" },
-];
 // Unread notification count — reads from API
 function useUnreadCount() {
   const [count, setCount] = useState(0);
@@ -46,8 +26,8 @@ function useUnreadCount() {
     };
 
     fetchUnreadCount();
-    
-    // Optional: Poll every 60 seconds
+
+    // Poll every 60 seconds
     const intervalId = setInterval(fetchUnreadCount, 60000);
     return () => clearInterval(intervalId);
   }, []);
@@ -55,10 +35,6 @@ function useUnreadCount() {
 }
 
 export default function Navbar() {
-  const router = useRouter();
-  const pathname = usePathname();
-  
-  // Use custom profile hook
   const { data: profile } = useProfile();
   const user = profile ? {
     imageUrl: profile.avatarUrl,
@@ -68,82 +44,11 @@ export default function Navbar() {
   } : null;
 
   const { isMobileMenuOpen, setMobileMenuOpen } = useNavbar();
-  const [query, setQuery] = useState("");
-  const [selectedIdx, setSelectedIdx] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const unreadCount = useUnreadCount();
 
-  // Derive XP from user metadata (BACKEND TODO: from /api/user/me)
-  const xp = user?.xp ?? 2450;
+  // BUG-FIX: derive XP from live profile data (was hardcoded 2450 fallback)
+  const xp = user?.xp ?? 0;
 
-  const { data: companiesResp } = useCompanies();
-  const allCompanies = companiesResp?.data?.companies || companiesResp?.companies || [];
-
-  // Derive results directly from query — no useEffect needed
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-    const compResults: SearchResult[] = allCompanies.map((c: any) => ({
-      type: "company",
-      label: c.name,
-      subtitle: `${c.questionsCount || 0} questions · ${c.type || "Company"}`,
-      href: `/companies/${c.slug}`,
-      slug: c.slug,
-      color: c.color || "bg-gray-600",
-      initial: c.name[0],
-    }));
-    return [...compResults, ...STATIC_TOPICS].filter(
-      (r) =>
-        r.label.toLowerCase().includes(q) ||
-        r.subtitle.toLowerCase().includes(q)
-    ).slice(0, 8);
-  }, [query, allCompanies]);
-  const open = results.length > 0 && query.trim().length > 0;
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setSelectedIdx(-1);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
-
-  // Keyboard navigation
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (!open) return;
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedIdx((i) => Math.min(i + 1, results.length - 1));
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedIdx((i) => Math.max(i - 1, 0));
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        const target = selectedIdx >= 0 ? results[selectedIdx] : results[0];
-        if (target) {
-          router.push(target.href);
-          setQuery("");
-          setSelectedIdx(-1);
-        }
-      } else if (e.key === "Escape") {
-        setQuery("");
-        setSelectedIdx(-1);
-        inputRef.current?.blur();
-      }
-    },
-    [open, results, selectedIdx, router]
-  );
-
-  const handleSelect = (r: SearchResult) => {
-    router.push(r.href);
-    setQuery("");
-    setSelectedIdx(-1);
-  };
   return (
     <header className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 flex items-center px-4 z-50 gap-2 lg:gap-0">
       {/* Mobile Menu Button */}
@@ -154,84 +59,15 @@ export default function Navbar() {
       >
         <Menu className="w-5 h-5" />
       </button>
-      
+
       {/* Logo */}
       <div className="flex items-center gap-2 lg:w-[216px] shrink-0">
         <div className="bg-blue-700 rounded px-2 py-1 text-white font-bold text-xs">NST</div>
         <span className="font-bold text-gray-900 text-sm hidden sm:inline-block">PlacePrep</span>
       </div>
 
-      {/* Search — global command palette (only on dashboard) */}
-      <div className="flex-1 flex justify-center px-4" ref={wrapperRef}>
-        {pathname === "/dashboard" && (
-          <div className="relative w-full max-w-md">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 pointer-events-none" />
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                onChange={(e) => { setQuery(e.target.value); setSelectedIdx(-1); }}
-                onKeyDown={handleKeyDown}
-                placeholder="Search company, topic, or question..."
-                className="w-full pl-9 pr-8 py-2 text-sm bg-gray-50 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all text-gray-900 placeholder-gray-400"
-                aria-label="Global search"
-                aria-autocomplete="list"
-              />
-              {query && (
-                <button
-                  onClick={() => { setQuery(""); setSelectedIdx(-1); }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  aria-label="Clear search"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
-            {/* Dropdown results */}
-            {open && results.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden z-50">
-                {results.map((r, idx) => (
-                  <button
-                    key={`${r.type}-${r.label}`}
-                    onClick={() => handleSelect(r)}
-                    className={`w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-gray-50 transition-colors ${
-                      idx === selectedIdx ? "bg-blue-50" : ""
-                    }`}
-                  >
-                    {r.type === "company" ? (
-                      <div className={`w-7 h-7 ${r.color} rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0`}>
-                        {r.initial}
-                      </div>
-                    ) : (
-                      <div className="w-7 h-7 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
-                        {r.type === "topic" ? (
-                          <Tag className="w-3.5 h-3.5 text-blue-600" />
-                        ) : (
-                          <Building2 className="w-3.5 h-3.5 text-gray-500" />
-                        )}
-                      </div>
-                    )}
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">{r.label}</div>
-                      <div className="text-xs text-gray-500 truncate">{r.subtitle}</div>
-                    </div>
-                    <span className="ml-auto text-[10px] font-semibold uppercase tracking-wide text-gray-400 shrink-0">
-                      {r.type}
-                    </span>
-                  </button>
-                ))}
-                <div className="px-4 py-2 border-t border-gray-100 text-xs text-gray-400 flex items-center gap-1">
-                  <kbd className="font-mono bg-gray-100 rounded px-1">↑↓</kbd> navigate &nbsp;
-                  <kbd className="font-mono bg-gray-100 rounded px-1">↵</kbd> open &nbsp;
-                  <kbd className="font-mono bg-gray-100 rounded px-1">esc</kbd> close
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      {/* BUG-FIX A1: removed global search bar that was rendered only on /dashboard */}
+      <div className="flex-1" />
 
       {/* Right side */}
       <div className="flex items-center gap-3.5 ml-auto">
@@ -280,8 +116,6 @@ export default function Navbar() {
             </div>
           )}
         </Link>
-
-
       </div>
     </header>
   );

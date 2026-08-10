@@ -11,6 +11,7 @@ export async function GET(req: Request) {
     const count = await Notification.countDocuments({
       userId: auth.userId,
       isRead: false,
+      type: { $in: ['session', 'doubt'] }, // BUG-FIX F1
     });
 
     return NextResponse.json({
