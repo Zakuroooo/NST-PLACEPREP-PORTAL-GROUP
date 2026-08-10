@@ -1,5 +1,6 @@
 /**
  * backend/src/models/FacultyProfile.ts
+ * (Schema updated via automated documentation pass)
  * Faculty data — 1:1 with User.
  */
 
