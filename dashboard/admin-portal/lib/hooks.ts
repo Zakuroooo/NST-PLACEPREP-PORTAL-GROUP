@@ -214,3 +214,97 @@ export async function createUser(body: {
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
+
+// ── Admin Questions ──────────────────────────────────────────────────────────
+
+export function useAdminQuestions(
+  page: number,
+  limit: number,
+  filters: {
+    company?: string;
+    difficulty?: string;
+    roundType?: string;
+    questionType?: string;
+    verified?: string;
+  }
+) {
+  const qs = new URLSearchParams();
+  qs.set("page", String(page));
+  qs.set("limit", String(limit));
+  if (filters.company) qs.set("company", filters.company);
+  if (filters.difficulty) qs.set("difficulty", filters.difficulty);
+  if (filters.roundType) qs.set("roundType", filters.roundType);
+  if (filters.questionType) qs.set("questionType", filters.questionType);
+  if (filters.verified) qs.set("verified", filters.verified);
+  return useSWR(`/api/admin/questions?${qs.toString()}`, fetcher);
+}
+
+export async function patchQuestion(id: string, body: Record<string, unknown>) {
+  const res = await fetch(`/api/admin/questions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function deleteQuestion(id: string) {
+  const res = await fetch(`/api/admin/questions/${id}`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function bulkApproveQuestions(ids: string[], verified: boolean) {
+  const res = await fetch("/api/admin/questions/bulk-approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ids, verified }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export function useAdminQuestion(id: string | null) {
+  return useSWR(id ? `/api/admin/questions/${id}` : null, fetcher);
+}
+
+export async function bulkApproveByFilter(
+  filters: { company?: string; difficulty?: string; questionType?: string; verified?: string },
+  verified: boolean
+) {
+  const res = await fetch("/api/admin/questions/bulk-approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ filter: filters, verified }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ── Admin Companies ──────────────────────────────────────────────────────────
+
+export function useAdminCompanies(page: number, limit: number, category?: string) {
+  const qs = new URLSearchParams();
+  qs.set("page", String(page));
+  qs.set("limit", String(limit));
+  if (category) qs.set("category", category);
+  return useSWR(`/api/admin/companies?${qs.toString()}`, fetcher);
+}
+
+export async function patchAdminCompany(slug: string, body: Record<string, unknown>) {
+  const res = await fetch(`/api/admin/companies/${slug}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}

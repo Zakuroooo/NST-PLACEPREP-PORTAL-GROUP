@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, GraduationCap, UserCog,
   Bell, HelpCircle, Calendar, FileText, LogOut,
   Activity, MessageSquare, Dumbbell, Briefcase,
-  Trophy, BookCopy,
+  Trophy, BookCopy, ClipboardList, Building2,
 } from "lucide-react";
 
 const navGroups = [
@@ -22,6 +22,13 @@ const navGroups = [
       { name: "Students", href: "/students", icon: GraduationCap },
       { name: "Faculty", href: "/faculty", icon: Users },
       { name: "Manage Faculty", href: "/manage-faculty", icon: UserCog },
+    ],
+  },
+  {
+    label: "Content",
+    items: [
+      { name: "Questions", href: "/questions", icon: ClipboardList },
+      { name: "Companies", href: "/companies", icon: Building2 },
     ],
   },
   {
