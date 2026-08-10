@@ -1,11 +1,12 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Search, ChevronRight, Plus, Check, XCircle } from "lucide-react";
 import { useCompanies, useRoadmap } from "@/lib/hooks";
 import AddToRoadmapModal from "@/components/modals/AddToRoadmapModal";
 
-const FILTERS = ["All", "FAANG", "Indian Product", "Indian Startup", "Service"] as const;
+// BUG-FIX B2: corrected labels ("Indian Service" not "Service") and order
+const FILTERS = ["All", "FAANG", "Product", "Service", "Startup"] as const;
 type Filter = typeof FILTERS[number];
 
 type Company = {
@@ -25,6 +26,10 @@ export default function CompaniesPage() {
   const [search, setSearch] = useState("");
   const [modalCompany, setModalCompany] = useState<Company | null>(null);
   const [showLimitToast, setShowLimitToast] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(100); // BUG-FIX B1: paginate 100 at a time
+
+  // BUG-FIX B1: reset visible count whenever filter or search changes
+  useEffect(() => { setVisibleCount(100); }, [activeFilter, search]);
 
   // Real API data
   const { data: companiesData, isLoading } = useCompanies();
@@ -43,9 +48,9 @@ export default function CompaniesPage() {
   const categoryMatch = (co: Company): string[] => {
     const cat = (co.category ?? co.type ?? "").toLowerCase();
     if (cat.includes("faang") || cat === "maang") return ["FAANG"];
-    if (cat.includes("product")) return ["Indian Product"];
-    if (cat.includes("startup")) return ["Indian Startup"];
-    if (cat.includes("service")) return ["Service"];
+    if (cat.includes("product")) return ["Product"];
+    if (cat.includes("startup")) return ["Startup"];
+    if (cat.includes("service")) return ["Service"]; // BUG-FIX B2: match renamed chip
     return [];
   };
 
@@ -121,7 +126,7 @@ export default function CompaniesPage() {
         </div>
       ) : !isLoading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filtered.map((co) => {
+          {filtered.slice(0, visibleCount).map((co) => { // BUG-FIX B1: render only up to visibleCount
             const inRoadmap = roadmapSlugs.includes(co.slug);
             return (
               <div
@@ -190,9 +195,21 @@ export default function CompaniesPage() {
         </div>
       ) : null}
 
+      {/* BUG-FIX B1: Load more button + updated summary */}
+      {!isLoading && visibleCount < filtered.length && (
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={() => setVisibleCount(v => v + 100)}
+            className="text-sm font-medium px-5 py-2 rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+          >
+            Load 100 more
+          </button>
+        </div>
+      )}
+
       {/* Summary */}
-      <p className="text-xs text-gray-400 mt-6 text-center">
-        Showing {filtered.length} of {allCompanies.length} companies
+      <p className="text-xs text-gray-400 mt-4 text-center">
+        Showing {Math.min(visibleCount, filtered.length)} of {filtered.length} companies
       </p>
 
       {/* Add to Roadmap Modal */}

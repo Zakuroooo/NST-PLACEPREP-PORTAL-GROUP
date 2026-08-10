@@ -1,10 +1,10 @@
 "use client";
-import { useState, use, useMemo } from "react";
+import { useState, use, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   BarChart2, Target, Layers, TrendingUp, ChevronRight,
   ExternalLink, Flame, Play, CheckCircle,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Loader2,
 } from "lucide-react";
 
 import {
@@ -12,6 +12,7 @@ import {
   Legend, CartesianGrid,
 } from "recharts";
 import { useCompany } from "@/lib/hooks";
+import { TARGET_ROLES } from "placeprep-backend/src/constants/roles";
 
 interface RoundGroup {
   round: string;
@@ -143,24 +144,37 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
   // BUG-C9: standardized role values to match targetRoles on Question model
   const [role, setRole] = useState("SDE-1");
 
+  const [trendResult, setTrendResult] = useState<{ data: any[]; hasData: boolean } | null>(null);
+  const [trendLoading, setTrendLoading] = useState(false);
+
+  // Fetch once when Trends tab first becomes active; cached in state so
+  // switching tabs back and forth does not repeat the request.
+  useEffect(() => {
+    if (activeTab !== "Trends" || trendResult !== null) return;
+    let cancelled = false;
+    setTrendLoading(true);
+    fetch(`/api/companies/${slug}/trends`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!cancelled) {
+          const payload = d.data ?? {};
+          setTrendResult({ data: payload.data ?? [], hasData: payload.hasData ?? false });
+        }
+      })
+      .catch(() => { if (!cancelled) setTrendResult({ data: [], hasData: false }); })
+      .finally(() => { if (!cancelled) setTrendLoading(false); });
+    return () => { cancelled = true; };
+  }, [activeTab, slug, trendResult]);
+
   const displayName = company?.name || (slug.charAt(0).toUpperCase() + slug.slice(1));
   const initial = displayName.charAt(0);
 
-  // BUG-C9 FIX: Role dropdown now filters questions. Map display roles to roundTypes.
-  const roleToRoundTypes: Record<string, string[]> = {
-    'SDE-1':           ['Coding', 'HR', 'LLD'],
-    'SDE-2':           ['Coding', 'System Design', 'LLD', 'HR'],
-    'Data Analyst':    ['Domain', 'Aptitude', 'HR'],
-    'Product Manager': ['Domain', 'HR', 'Managerial'],
-    'DevOps':          ['Coding', 'System Design', 'HR'],
-  };
-  const allowedRoundTypes = roleToRoundTypes[role] ?? null; // null = show all
-
   const roundQuestions: RoundGroup[] = useMemo(() => {
     if (!company?.questions) return [];
-    const filtered = allowedRoundTypes
-      ? company.questions.filter((q: any) => allowedRoundTypes.includes(q.roundType || 'Coding'))
-      : company.questions;
+    // Phase 3: filter by targetRoles[] if populated; fall back to show all when empty
+    const filtered = company.questions.filter((q: any) =>
+      q.targetRoles?.length > 0 ? q.targetRoles.includes(role) : true
+    );
     const grouped = filtered.reduce((acc: any, q: any) => {
       const rt = q.roundType || 'Coding';
       if (!acc[rt]) acc[rt] = [];
@@ -176,10 +190,9 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
     }));
   }, [company?.questions, role]);
 
-  const totalQuestionCount = (allowedRoundTypes
-    ? company?.questions?.filter((q: any) => allowedRoundTypes.includes(q.roundType || 'Coding'))
-    : company?.questions
-  )?.length || 0;
+  const totalQuestionCount = company?.questions?.filter((q: any) =>
+    q.targetRoles?.length > 0 ? q.targetRoles.includes(role) : true
+  ).length || 0;
 
   if (isLoading) return <div className="p-8 text-center text-gray-500">Loading company details...</div>;
   if (!company) return <div className="p-8 text-center text-red-500">Company not found</div>;
@@ -233,22 +246,27 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
       { name: "Medium", value: company.difficultyDistribution.Medium || 0, color: "#F59E0B" },
       { name: "Hard",   value: company.difficultyDistribution.Hard   || 0, color: "#EF4444" },
     ] : [],
-    // BUG-C2 FIX: Compute Interview DNA from roundTypeDistribution (from DB) or derive from questions
+    // Interview DNA — three-tier priority chain:
+    //   Tier 1: roundStructure entries have derived percentage (qualifying companies ≥10q/≥2 rounds)
+    //   Tier 2: roundStructure exists but below threshold — equal weight per round type present
+    //   Tier 3: no roundStructure data — proportional defaults, no caveat shown
     interviewDNA: (() => {
-      // Prefer explicit roundTypeDistribution if stored on company
-      if (company.roundTypeDistribution && Object.keys(company.roundTypeDistribution).length > 0) {
-        const dist = company.roundTypeDistribution;
-        const total = Object.values(dist).reduce((s: number, v: any) => s + (Number(v) || 0), 0);
-        if (total > 0) {
-          return [
-            { label: 'DSA',         key: 'Coding',        color: 'bg-blue-600',  pct: Math.round(((dist.Coding || 0) / total) * 100) },
-            { label: 'Sys Design',  key: 'System Design', color: 'bg-amber-400', pct: Math.round(((dist['System Design'] || 0) / total) * 100) },
-            { label: 'Behavioral',  key: 'HR',            color: 'bg-green-500', pct: Math.round(((dist.HR || dist.Behavioral || 0) / total) * 100) },
-            { label: 'Domain/Other',key: 'Domain',        color: 'bg-gray-300',  pct: Math.round(((dist.Domain || dist.Aptitude || 0) / total) * 100) },
-          ].filter(d => d.pct > 0);
-        }
+      // Tier 1: derived from verified question distribution (13 qualifying companies today)
+      const withPct = (company.roundStructure ?? []).filter((r: any) => r.percentage != null);
+      if (withPct.length >= 2) {
+        const byType: Record<string, number> = {};
+        withPct.forEach((r: any) => { byType[r.roundType] = (byType[r.roundType] ?? 0) + r.percentage; });
+        return {
+          segments: [
+            { label: 'DSA',          color: 'bg-blue-600',  pct: byType['Coding'] ?? 0 },
+            { label: 'Sys Design',   color: 'bg-amber-400', pct: byType['System Design'] ?? 0 },
+            { label: 'Behavioral',   color: 'bg-green-500', pct: (byType['HR'] ?? 0) + (byType['Managerial'] ?? 0) },
+            { label: 'Domain/Other', color: 'bg-gray-300',  pct: (byType['Domain'] ?? 0) + (byType['Aptitude'] ?? 0) },
+          ].filter(s => s.pct > 0),
+          estimated: true,
+        };
       }
-      // Fallback: derive from roundStructure types if available
+      // Tier 2: round types present but no derived percentages — equal weight per type
       if (company.roundStructure && company.roundStructure.length > 0) {
         const counts: Record<string, number> = {};
         company.roundStructure.forEach((r: any) => {
@@ -256,27 +274,27 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
           counts[t] = (counts[t] || 0) + 1;
         });
         const total = company.roundStructure.length;
-        return [
-          { label: 'DSA',         key: 'Coding',        color: 'bg-blue-600',  pct: Math.round(((counts.Coding || 0) / total) * 100) },
-          { label: 'Sys Design',  key: 'System Design', color: 'bg-amber-400', pct: Math.round(((counts['System Design'] || 0) / total) * 100) },
-          { label: 'Behavioral',  key: 'HR',            color: 'bg-green-500', pct: Math.round(((counts.HR || counts.Behavioral || 0) / total) * 100) },
-          { label: 'Domain',      key: 'Domain',        color: 'bg-gray-300',  pct: Math.round(((counts.Domain || counts.Aptitude || 0) / total) * 100) },
-        ].filter(d => d.pct > 0);
+        return {
+          segments: [
+            { label: 'DSA',          color: 'bg-blue-600',  pct: Math.round(((counts.Coding || 0) / total) * 100) },
+            { label: 'Sys Design',   color: 'bg-amber-400', pct: Math.round(((counts['System Design'] || 0) / total) * 100) },
+            { label: 'Behavioral',   color: 'bg-green-500', pct: Math.round(((counts.HR || counts.Behavioral || 0) / total) * 100) },
+            { label: 'Domain/Other', color: 'bg-gray-300',  pct: Math.round(((counts.Domain || counts.Aptitude || 0) / total) * 100) },
+          ].filter(s => s.pct > 0),
+          estimated: true,
+        };
       }
-      // Last resort: proportional defaults (no DB data yet)
-      return [
-        { label: 'DSA',        color: 'bg-blue-600',  pct: 55 },
-        { label: 'Sys Design', color: 'bg-amber-400', pct: 25 },
-        { label: 'Behavioral', color: 'bg-green-500', pct: 15 },
-        { label: 'Domain',     color: 'bg-gray-300',  pct: 5  },
-      ];
+      // Tier 3: no round data at all — proportional defaults, no caveat
+      return {
+        segments: [
+          { label: 'DSA',        color: 'bg-blue-600',  pct: 55 },
+          { label: 'Sys Design', color: 'bg-amber-400', pct: 25 },
+          { label: 'Behavioral', color: 'bg-green-500', pct: 15 },
+          { label: 'Domain',     color: 'bg-gray-300',  pct: 5  },
+        ],
+        estimated: false,
+      };
     })(),
-    trendData: [
-      { year: "2022", DSA: 60, SystemDesign: 20, Behavioral: 20 },
-      { year: "2023", DSA: 55, SystemDesign: 25, Behavioral: 20 },
-      { year: "2024", DSA: 50, SystemDesign: 30, Behavioral: 20 },
-      { year: "2025", DSA: 45, SystemDesign: 35, Behavioral: 20 },
-    ],
     sampleQuestions: company.questions?.slice(0, 3) || [],
   };
 
@@ -313,12 +331,9 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
                 className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Select role level"
               >
-                {/* BUG-C9 FIX: role values match targetRoles on Question model, so filtering works */}
-                <option value="SDE-1">SDE-1</option>
-                <option value="SDE-2">SDE-2</option>
-                <option value="Data Analyst">Data Analyst</option>
-                <option value="Product Manager">Product Manager</option>
-                <option value="DevOps">DevOps</option>
+                {TARGET_ROLES.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
               </select>
               {/* BUG-C6 FIX: was hardcoded 'Jun 2025' — now uses real company.lastSyncedAt or createdAt */}
               <p className="text-xs text-gray-400 mt-2">
@@ -438,11 +453,11 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
             </div>
           </div>
 
-          {/* Interview DNA — BUG-C2 FIX: computed from DB roundTypeDistribution */}
+          {/* Interview DNA */}
           <div className="bg-white border border-gray-200 rounded-xl p-5">
             <h3 className="font-semibold text-gray-900 mb-4">Interview DNA</h3>
             <div className="h-6 rounded-full overflow-hidden flex mb-3">
-              {intel.interviewDNA.map((segment) => (
+              {intel.interviewDNA.segments.map((segment) => (
                 <div
                   key={segment.label}
                   className={`${segment.color} flex items-center justify-center text-white text-xs font-medium`}
@@ -453,13 +468,18 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
               ))}
             </div>
             <div className="grid grid-cols-2 gap-1.5 text-xs">
-              {intel.interviewDNA.map((segment) => (
+              {intel.interviewDNA.segments.map((segment) => (
                 <div key={segment.label} className="flex items-center gap-1.5">
                   <div className={`w-2.5 h-2.5 rounded-sm ${segment.color}`} />
                   <span className="text-gray-600">{segment.label} ({segment.pct}%)</span>
                 </div>
               ))}
             </div>
+            {intel.interviewDNA.estimated && (
+              <p className="mt-3 text-xs text-gray-400">
+                Estimated from question frequency in this dataset — not verified interview-round data.
+              </p>
+            )}
           </div>
 
           {/* Top Topics */}
@@ -593,22 +613,34 @@ export default function CompanyPage({ params }: { params: Promise<{ name: string
       {/* ── Trends Tab ───────────────────────────────────────────── */}
       {activeTab === "Trends" && (
         <div className="bg-white border border-gray-200 rounded-xl p-6">
-          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-            Topic Trends (2022–2025)
-            <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-medium">Estimated / Historical Trend</span>
-          </h3>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={intel.trendData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-              <XAxis dataKey="year" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} unit="%" />
-              <Tooltip />
-              <Legend />
-              <Line type="monotone" dataKey="DSA"          stroke="#3B82F6" strokeWidth={2} />
-              <Line type="monotone" dataKey="SystemDesign" stroke="#8B5CF6" strokeWidth={2} />
-              <Line type="monotone" dataKey="Behavioral"   stroke="#10B981" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
+          <h3 className="font-semibold text-gray-900 mb-6">Round-type Trends by Year</h3>
+          {(trendLoading || trendResult === null) ? (
+            <div className="flex items-center justify-center gap-2 py-16 text-sm text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin" /> Loading trend data…
+            </div>
+          ) : trendResult.hasData ? (
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={trendResult.data}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
+                <XAxis dataKey="year" tick={{ fontSize: 12 }} />
+                <YAxis tick={{ fontSize: 12 }} unit="%" />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="DSA"          stroke="#3B82F6" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="SystemDesign" stroke="#8B5CF6" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="Behavioral"   stroke="#10B981" strokeWidth={2} dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <TrendingUp className="w-10 h-10 text-gray-200 mb-3" />
+              <p className="text-sm font-medium text-gray-500">No trend data yet for {displayName}</p>
+              <p className="text-xs text-gray-400 mt-2 max-w-xs leading-relaxed">
+                Trend data will appear here once questions are tagged with an interview year.
+                Questions can be tagged via the Admin portal.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

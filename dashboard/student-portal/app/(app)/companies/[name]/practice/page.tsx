@@ -62,13 +62,8 @@ export default function CompanyPracticePage({
     limit: PAGE_SIZE,
   });
 
-  // SWR fetcher unwraps json.data so practiceRes IS the array directly
-  const rawQuestions = Array.isArray(practiceRes)
-    ? practiceRes
-    : practiceRes?.questions ?? [];
-
-  // Total pages estimate from returned count
-  const hasNextPage = rawQuestions.length === PAGE_SIZE;
+  const rawQuestions = (practiceRes?.data ?? []) as any[];
+  const hasNextPage = page < (practiceRes?.meta?.totalPages ?? 1);
   const hasPrevPage = page > 1;
 
   const filtered = useMemo(() => {
