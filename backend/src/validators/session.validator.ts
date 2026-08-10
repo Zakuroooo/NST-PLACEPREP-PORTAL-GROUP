@@ -17,15 +17,18 @@ export const bookSessionSchema = z.object({
   requestedTime: z
     .string({ required_error: 'Please select a time' })
     .regex(/^\d{2}:\d{2}$/, 'Time must be in HH:mm format'),
-  durationMin: z.union([z.literal(30), z.literal(60)], {
-    required_error: 'Duration must be 30 or 60 minutes',
-  }),
+  // BUG-FIX C2: allow any integer 15–120, not just 30 or 60
+  durationMin: z.number({ required_error: 'Please choose a duration' }).int().min(15).max(120),
 });
 
 export const proposeSessionSchema = z.object({
   proposedDate: z
     .string({ required_error: 'Proposed date is required' })
-    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format')
+    // BUG-FIX G1: reject past dates at API layer (client-side min can be bypassed)
+    .refine((d) => d >= new Date().toISOString().slice(0, 10), {
+      message: 'Proposed date cannot be in the past',
+    }),
   proposedTime: z
     .string({ required_error: 'Proposed time is required' })
     .regex(/^\d{2}:\d{2}$/, 'Time must be in HH:mm format'),

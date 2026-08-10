@@ -41,6 +41,7 @@ export const onboardingSchema = z.object({
   topicSelfRatings: z.record(z.string(), z.number().int().min(1).max(5)),
   targetCompanySlugs: z.array(z.string()).min(1, 'Select at least one target company'),
   prepWeeksCommitted: z.number().int().min(4).max(52),
+  targetRole: z.string().min(1).max(100).trim(),
 });
 
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

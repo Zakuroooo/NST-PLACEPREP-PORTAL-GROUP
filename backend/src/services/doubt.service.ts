@@ -17,6 +17,15 @@ import { sanitizeAndLimit } from '../utils/sanitize';
  */
 const DOUBT_NOTIF_COOLDOWN_MIN = 5;
 
+// BUG-FIX G2: map student doubt tags to faculty subject domains for targeted routing
+const TAG_TO_SUBJECT: Record<string, string[]> = {
+  DSA: ['Data Structures & Algorithms', 'Dynamic Programming'],
+  'System Design': ['System Design'],
+  LLD: ['Low Level Design'],
+  HR: ['Interview Preparation'],
+  General: [], // broadcast to all — no domain restriction
+};
+
 async function notifyFacultyAboutDoubt(
   facultyUserId: string,
   studentName: string,
@@ -104,11 +113,19 @@ export const doubtService = {
       // Notify the specific faculty (with cooldown)
       void notifyFacultyAboutDoubt(data.assignedFacultyId, studentName, sanitizedSubject);
     } else {
-      // Open pool: notify ALL active faculty with spam cooldown per faculty member
+      // BUG-FIX G2: route to domain-matching faculty; fall back to all if no match or General tag
       facultyRepository
         .findAll()
         .then((allFaculty) => {
-          const notifyPromises = allFaculty.map((f) => {
+          const matchSubjects = TAG_TO_SUBJECT[data.tag] ?? [];
+          const targeted = matchSubjects.length > 0
+            ? allFaculty.filter((f) =>
+                matchSubjects.includes(f.subject) ||
+                (f.expertises ?? []).some((e: string) => matchSubjects.includes(e))
+              )
+            : [];
+          const toNotify = targeted.length > 0 ? targeted : allFaculty;
+          const notifyPromises = toNotify.map((f) => {
             const facultyUserId = f.userId?.toString();
             if (!facultyUserId) return Promise.resolve();
             return notifyFacultyAboutDoubt(facultyUserId, studentName, sanitizedSubject);

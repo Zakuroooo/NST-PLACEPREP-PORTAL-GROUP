@@ -14,8 +14,8 @@ export const notificationService = {
   /**
    * Get the 20 most recent notifications for a user.
    */
-  async getUserNotifications(userId: string): Promise<INotification[]> {
-    return notificationRepository.findByUserId(userId, 20);
+  async getUserNotifications(userId: string, types?: string[]): Promise<INotification[]> { // BUG-FIX F1
+    return notificationRepository.findByUserId(userId, 20, types); // BUG-FIX F1
   },
 
   /**
