@@ -20,6 +20,40 @@ export const facultyRepository = {
     return FacultyProfile.find().sort({ fullName: 1 }).lean<IFacultyProfile[]>();
   },
 
+  /**
+   * Faculty assigned to a given doubt domain, used for notification routing.
+   * INVITE_PENDING is excluded — they have no account to receive a notification.
+   */
+  async findByDoubtDomain(domain: string): Promise<IFacultyProfile[]> {
+    return FacultyProfile.find({
+      status: { $ne: 'INVITE_PENDING' },
+      doubtDomains: domain,
+    })
+      .sort({ fullName: 1 })
+      .lean<IFacultyProfile[]>();
+  },
+
+  /**
+   * Every domain that has at least one active faculty assigned.
+   * The complement of this set is what falls back to all-faculty visibility,
+   * so it is computed from the DB rather than assumed.
+   */
+  async findCoveredDoubtDomains(): Promise<string[]> {
+    return FacultyProfile.distinct('doubtDomains', {
+      status: { $ne: 'INVITE_PENDING' },
+    }) as unknown as Promise<string[]>;
+  },
+
+  /** Per-domain assigned counts, for the admin coverage overview. */
+  async countByDoubtDomain(): Promise<Record<string, number>> {
+    const rows = await FacultyProfile.aggregate<{ _id: string; count: number }>([
+      { $match: { status: { $ne: 'INVITE_PENDING' } } },
+      { $unwind: '$doubtDomains' },
+      { $group: { _id: '$doubtDomains', count: { $sum: 1 } } },
+    ]);
+    return Object.fromEntries(rows.map((r) => [r._id, r.count]));
+  },
+
   async findById(id: string): Promise<IFacultyProfile | null> {
     return FacultyProfile.findById(id).lean<IFacultyProfile>();
   },

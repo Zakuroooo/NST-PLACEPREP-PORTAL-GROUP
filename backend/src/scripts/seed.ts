@@ -348,17 +348,20 @@ const STUDENT_SEEDS = [
 ];
 
 // ─── FACULTY (10) ─────────────────────────────────────────────────────────────
+// doubtDomains drives doubt routing (admin-editable later via Manage Faculty).
+// Every domain gets at least two faculty so no domain falls back to notifying
+// everyone; a few carry a second domain where their subject spans both.
 const FACULTY_SEEDS = [
-  { name: 'Dr. Priya Nair',       email: 'priya.nair@newtonschool.co',       subject: 'Data Structures & Algorithms', initials: 'PN', stream: 'Computer Science' },
-  { name: 'Prof. Rajesh Kumar',   email: 'rajesh.kumar@newtonschool.co',    subject: 'System Design',                 initials: 'RK', stream: 'Software Engineering' },
-  { name: 'Dr. Meera Singh',      email: 'meera.singh@newtonschool.co',     subject: 'Database Management',           initials: 'MS', stream: 'Computer Science' },
-  { name: 'Prof. Amit Sharma',    email: 'amit.sharma@newtonschool.co',     subject: 'Operating Systems',             initials: 'AS', stream: 'Systems' },
-  { name: 'Dr. Kavita Rao',       email: 'kavita.rao@newtonschool.co',      subject: 'Computer Networks',             initials: 'KR', stream: 'Networking' },
-  { name: 'Prof. Suresh Menon',   email: 'suresh.menon@newtonschool.co',    subject: 'Dynamic Programming',           initials: 'SM', stream: 'Computer Science' },
-  { name: 'Dr. Ananya Ghosh',     email: 'ananya.ghosh@newtonschool.co',    subject: 'Machine Learning',              initials: 'AG', stream: 'AI & ML' },
-  { name: 'Prof. Vikram Desai',   email: 'vikram.desai@newtonschool.co',    subject: 'Low Level Design',              initials: 'VD', stream: 'Software Engineering' },
-  { name: 'Dr. Pooja Srivastava', email: 'pooja.srivastava@newtonschool.co', subject: 'Aptitude & Reasoning',        initials: 'PS', stream: 'Quantitative' },
-  { name: 'Prof. Ravi Tiwari',    email: 'ravi.tiwari@newtonschool.co',     subject: 'Interview Preparation',         initials: 'RT', stream: 'Soft Skills' },
+  { name: 'Dr. Priya Nair',       email: 'priya.nair@newtonschool.co',       subject: 'Data Structures & Algorithms', initials: 'PN', stream: 'Computer Science',      doubtDomains: ['DSA'] },
+  { name: 'Prof. Rajesh Kumar',   email: 'rajesh.kumar@newtonschool.co',    subject: 'System Design',                 initials: 'RK', stream: 'Software Engineering', doubtDomains: ['System Design'] },
+  { name: 'Dr. Meera Singh',      email: 'meera.singh@newtonschool.co',     subject: 'Database Management',           initials: 'MS', stream: 'Computer Science',      doubtDomains: ['System Design', 'Web Development'] },
+  { name: 'Prof. Amit Sharma',    email: 'amit.sharma@newtonschool.co',     subject: 'Operating Systems',             initials: 'AS', stream: 'Systems',               doubtDomains: ['LLD', 'General'] },
+  { name: 'Dr. Kavita Rao',       email: 'kavita.rao@newtonschool.co',      subject: 'Computer Networks',             initials: 'KR', stream: 'Networking',            doubtDomains: ['Web Development', 'General'] },
+  { name: 'Prof. Suresh Menon',   email: 'suresh.menon@newtonschool.co',    subject: 'Dynamic Programming',           initials: 'SM', stream: 'Computer Science',      doubtDomains: ['DSA'] },
+  { name: 'Dr. Ananya Ghosh',     email: 'ananya.ghosh@newtonschool.co',    subject: 'Machine Learning',              initials: 'AG', stream: 'AI & ML',               doubtDomains: ['Aptitude'] },
+  { name: 'Prof. Vikram Desai',   email: 'vikram.desai@newtonschool.co',    subject: 'Low Level Design',              initials: 'VD', stream: 'Software Engineering', doubtDomains: ['LLD'] },
+  { name: 'Dr. Pooja Srivastava', email: 'pooja.srivastava@newtonschool.co', subject: 'Aptitude & Reasoning',        initials: 'PS', stream: 'Quantitative',          doubtDomains: ['Aptitude', 'HR'] },
+  { name: 'Prof. Ravi Tiwari',    email: 'ravi.tiwari@newtonschool.co',     subject: 'Interview Preparation',         initials: 'RT', stream: 'Soft Skills',           doubtDomains: ['HR'] },
 ];
 
 // Helper to generate a random date in the past N days
@@ -408,6 +411,7 @@ async function seed() {
       initials: f.initials,
       subject: f.subject,
       stream: f.stream,
+      doubtDomains: f.doubtDomains,
       status: 'ACTIVE',
       acceptCount: Math.floor(Math.random() * 30) + 5,
       declineCount: Math.floor(Math.random() * 5),

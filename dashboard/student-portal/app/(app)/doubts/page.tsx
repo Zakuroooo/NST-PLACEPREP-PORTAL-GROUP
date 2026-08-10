@@ -6,9 +6,22 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useProfile } from "@/lib/hooks";
+import ErrorState from "@/components/ErrorState";
 
 type DoubtStatus = "pending" | "answered" | "resolved";
-type DoubtTag = "DSA" | "System Design" | "LLD" | "HR" | "General";
+/**
+ * Must stay in sync with DOUBT_DOMAINS in backend/src/types/shared.types.ts.
+ * A tag missing here is a tag no student can ever pick, which strands every
+ * faculty the admin assigned to that domain.
+ */
+type DoubtTag =
+  | "DSA"
+  | "System Design"
+  | "LLD"
+  | "Web Development"
+  | "Aptitude"
+  | "HR"
+  | "General";
 
 interface DoubtReply {
   id: string;
@@ -28,7 +41,15 @@ interface Doubt {
   replies: DoubtReply[];
 }
 
-const TAGS: DoubtTag[] = ["DSA", "System Design", "LLD", "HR", "General"];
+const TAGS: DoubtTag[] = [
+  "DSA",
+  "System Design",
+  "LLD",
+  "Web Development",
+  "Aptitude",
+  "HR",
+  "General",
+];
 
 
 
@@ -42,11 +63,13 @@ const STATUS_MAP: Record<DoubtStatus, { label: string; dot: string; badge: strin
 
 // ── Tag config — blue-scale only ──────────────────────
 const TAG_MAP: Record<DoubtTag, string> = {
-  "DSA":           "bg-blue-100 text-blue-800",
-  "System Design": "bg-blue-50 text-blue-700",
-  "LLD":           "bg-slate-100 text-slate-700",
-  "HR":            "bg-gray-100 text-gray-700",
-  "General":       "bg-gray-50 text-gray-600",
+  "DSA":             "bg-blue-100 text-blue-800",
+  "System Design":   "bg-blue-50 text-blue-700",
+  "LLD":             "bg-slate-100 text-slate-700",
+  "Web Development": "bg-sky-50 text-sky-700",
+  "Aptitude":        "bg-indigo-50 text-indigo-700",
+  "HR":              "bg-gray-100 text-gray-700",
+  "General":         "bg-gray-50 text-gray-600",
 };
 
 function timeAgo(iso: string) {
@@ -307,6 +330,10 @@ function NewDoubtDrawer({ onClose, onSubmit }: {
 export default function DoubtsPage() {
   const [doubts, setDoubts] = useState<Doubt[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // Failures here used to be swallowed into an empty list, so a network error
+  // was indistinguishable from "you have no doubts yet".
+  const [loadError, setLoadError] = useState<Error | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState<"all" | DoubtStatus>("all");
   // BUG-C FIX: Get real student name for reply authorName
@@ -314,6 +341,7 @@ export default function DoubtsPage() {
 
   useEffect(() => {
     setIsLoading(true);
+    setLoadError(null);
     import("@/lib/api").then(({ getDoubts }) =>
       getDoubts().then((data: any[]) => {
         const mapped: Doubt[] = data.map((d) => ({
@@ -333,9 +361,15 @@ export default function DoubtsPage() {
         }));
         if (mapped.length > 0) setDoubts(mapped);
         setIsLoading(false);
-      }).catch(() => { setIsLoading(false); })
-    ).catch(() => { setIsLoading(false); });
-  }, []);
+      }).catch((err: unknown) => {
+        setLoadError(err instanceof Error ? err : new Error('Failed to load doubts.'));
+        setIsLoading(false);
+      })
+    ).catch((err: unknown) => {
+      setLoadError(err instanceof Error ? err : new Error('Failed to load doubts.'));
+      setIsLoading(false);
+    });
+  }, [reloadKey]);
 
   const handleSubmit = (d: Omit<Doubt, "id" | "replies" | "createdAt" | "status">) => {
     import("@/lib/hooks").then(({ createDoubt }) =>
@@ -407,6 +441,16 @@ export default function DoubtsPage() {
     answered: doubts.filter((d) => d.status === "answered").length,
     resolved: doubts.filter((d) => d.status === "resolved").length,
   };
+
+  if (loadError) {
+    return (
+      <ErrorState
+        error={loadError}
+        title="Couldn't load your doubts"
+        onRetry={() => setReloadKey((k) => k + 1)}
+      />
+    );
+  }
 
   if (isLoading) {
     return (

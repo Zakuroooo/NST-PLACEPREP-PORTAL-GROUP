@@ -17,14 +17,24 @@ import { sanitizeAndLimit } from '../utils/sanitize';
  */
 const DOUBT_NOTIF_COOLDOWN_MIN = 5;
 
-// BUG-FIX G2: map student doubt tags to faculty subject domains for targeted routing
-const TAG_TO_SUBJECT: Record<string, string[]> = {
-  DSA: ['Data Structures & Algorithms', 'Dynamic Programming'],
-  'System Design': ['System Design'],
-  LLD: ['Low Level Design'],
-  HR: ['Interview Preparation'],
-  General: [], // broadcast to all — no domain restriction
-};
+/**
+ * Faculty who should be notified about a doubt with this tag.
+ *
+ * Domains are assigned by an admin and read from the DB — there is no static
+ * tag→subject map any more. The previous TAG_TO_SUBJECT constant hardcoded
+ * which subjects counted as "DSA" etc., so adding a domain meant editing
+ * source, and two of the seven tags had no entry at all.
+ *
+ * Falls back to all faculty when a domain has nobody assigned, so a doubt is
+ * never silently un-notified because of an admin gap. This mirrors the
+ * visibility fallback in doubt.repository.findByFacultyId — the two must agree,
+ * otherwise faculty would be notified about doubts they cannot open.
+ */
+async function resolveRecipients(tag: string) {
+  const targeted = await facultyRepository.findByDoubtDomain(tag);
+  if (targeted.length > 0) return targeted;
+  return facultyRepository.findAll();
+}
 
 async function notifyFacultyAboutDoubt(
   facultyUserId: string,
@@ -113,25 +123,17 @@ export const doubtService = {
       // Notify the specific faculty (with cooldown)
       void notifyFacultyAboutDoubt(data.assignedFacultyId, studentName, sanitizedSubject);
     } else {
-      // BUG-FIX G2: route to domain-matching faculty; fall back to all if no match or General tag
-      facultyRepository
-        .findAll()
-        .then((allFaculty) => {
-          const matchSubjects = TAG_TO_SUBJECT[data.tag] ?? [];
-          const targeted = matchSubjects.length > 0
-            ? allFaculty.filter((f) =>
-                matchSubjects.includes(f.subject) ||
-                (f.expertises ?? []).some((e: string) => matchSubjects.includes(e))
-              )
-            : [];
-          const toNotify = targeted.length > 0 ? targeted : allFaculty;
-          const notifyPromises = toNotify.map((f) => {
-            const facultyUserId = f.userId?.toString();
-            if (!facultyUserId) return Promise.resolve();
-            return notifyFacultyAboutDoubt(facultyUserId, studentName, sanitizedSubject);
-          });
-          return Promise.all(notifyPromises);
-        })
+      // Open pool: notify faculty assigned to this doubt's domain by the admin.
+      resolveRecipients(data.tag)
+        .then((recipients) =>
+          Promise.all(
+            recipients.map((f) => {
+              const facultyUserId = f.userId?.toString();
+              if (!facultyUserId) return Promise.resolve();
+              return notifyFacultyAboutDoubt(facultyUserId, studentName, sanitizedSubject);
+            })
+          )
+        )
         .catch(() => {}); // Non-blocking
     }
 

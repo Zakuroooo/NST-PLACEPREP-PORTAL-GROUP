@@ -181,6 +181,33 @@ export interface UserRoadmap {
 
 export type DoubtTag = 'DSA' | 'System Design' | 'LLD' | 'HR' | 'General' | 'Web Development' | 'Aptitude';
 
+/**
+ * Canonical doubt-domain list — the single source of truth for faculty routing.
+ *
+ * A faculty member's `doubtDomains` holds values from this list, and a doubt's
+ * `tag` is matched against it directly. Previously routing relied on a
+ * TAG_TO_SUBJECT map that translated short tags ("DSA") into long-form subject
+ * strings ("Data Structures & Algorithms"), which meant three separate
+ * vocabularies had to agree; they didn't, so routing silently matched nothing.
+ * Tags and domains are now the same strings, so no translation exists to drift.
+ *
+ * Order is the display order in the admin assignment UI.
+ */
+export const DOUBT_DOMAINS: readonly DoubtTag[] = [
+  'DSA',
+  'System Design',
+  'LLD',
+  'Web Development',
+  'Aptitude',
+  'HR',
+  'General',
+] as const;
+
+/** Runtime guard for untrusted input (admin PATCH bodies, query params). */
+export function isDoubtDomain(value: unknown): value is DoubtTag {
+  return typeof value === 'string' && (DOUBT_DOMAINS as readonly string[]).includes(value);
+}
+
 export type DoubtStatus = 'pending' | 'answered' | 'resolved';
 
 export interface DoubtReply {

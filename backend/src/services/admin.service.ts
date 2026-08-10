@@ -17,6 +17,8 @@ import { ApiError } from '../utils/apiError';
 import { sanitizeAndLimit } from '../utils/sanitize';
 import type { IStudentProfile } from '../models/StudentProfile';
 import type { IFacultyProfile } from '../models/FacultyProfile';
+import type { DoubtTag as DoubtDomain } from '../types/shared.types';
+import { DOUBT_DOMAINS } from '../types/shared.types';
 
 export const adminService = {
   /**
@@ -246,6 +248,8 @@ export const adminService = {
         satisfaction: p.satisfactionAvg || 0,
         responseRate: p.responseRate || 0,
         status: p.status,
+        // Admin-assigned doubt domains — drives which doubts reach this faculty.
+        doubtDomains: p.doubtDomains ?? [],
       };
     });
   },
@@ -271,7 +275,7 @@ export const adminService = {
    * Update faculty fields.
    */
   async updateFaculty(id: string, data: Partial<IFacultyProfile>) {
-    const allowed = ['subject', 'stream', 'status', 'initials'];
+    const allowed = ['subject', 'stream', 'status', 'initials', 'doubtDomains'];
     const updates: Record<string, unknown> = {};
     for (const key of allowed) {
       if ((data as Record<string, unknown>)[key] !== undefined) {
@@ -279,9 +283,46 @@ export const adminService = {
       }
     }
 
+    // doubtDomains drives doubt routing, so reject unknown values here rather
+    // than letting them reach the DB where they would silently match nothing.
+    if (updates.doubtDomains !== undefined) {
+      const raw = updates.doubtDomains;
+      if (!Array.isArray(raw)) {
+        throw ApiError.badRequest('doubtDomains must be an array.');
+      }
+      const invalid = raw.filter((d) => !DOUBT_DOMAINS.includes(d as DoubtDomain));
+      if (invalid.length > 0) {
+        throw ApiError.badRequest(
+          `Unknown doubt domain(s): ${invalid.join(', ')}. Valid values: ${DOUBT_DOMAINS.join(', ')}.`
+        );
+      }
+      updates.doubtDomains = Array.from(new Set(raw as string[]));
+    }
+
     const updated = await facultyRepository.updateById(id, updates as Partial<IFacultyProfile>);
     if (!updated) throw ApiError.notFound('Faculty member');
     return updated;
+  },
+
+  /**
+   * Doubt-domain coverage: how many faculty are assigned to each domain.
+   *
+   * Surfaces gaps to the admin — a domain with zero faculty falls back to
+   * notifying everyone, which is safe but defeats the point of routing.
+   */
+  async getDoubtDomainCoverage() {
+    const faculty = await facultyRepository.findAll();
+    return DOUBT_DOMAINS.map((domain) => {
+      const assigned = faculty.filter((f) => (f.doubtDomains ?? []).includes(domain));
+      return {
+        domain,
+        facultyCount: assigned.length,
+        faculty: assigned.map((f) => ({
+          id: (f._id as { toString(): string }).toString(),
+          fullName: f.fullName,
+        })),
+      };
+    });
   },
 
   /**

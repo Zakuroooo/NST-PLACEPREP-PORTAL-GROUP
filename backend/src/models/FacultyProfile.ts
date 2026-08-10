@@ -4,7 +4,8 @@
  */
 
 import mongoose, { Schema, Document, Model } from 'mongoose';
-import type { FacultyStatus } from '../types/shared.types';
+import type { FacultyStatus, DoubtTag } from '../types/shared.types';
+import { DOUBT_DOMAINS } from '../types/shared.types';
 
 export interface IFacultyProfile extends Document {
   _id: mongoose.Types.ObjectId;
@@ -25,6 +26,14 @@ export interface IFacultyProfile extends Document {
   department?: string;
   joinedDate?: string;
   expertises?: string[];
+  /**
+   * Doubt domains this faculty answers, assigned by an admin.
+   * Drives BOTH doubt-list visibility and notification routing.
+   * Distinct from `expertises` (free-text CV-style tags, display only) and
+   * from `subject` (their primary teaching subject) — this one is a validated
+   * enum because routing correctness depends on exact matches.
+   */
+  doubtDomains: DoubtTag[];
   title?: string;
   experience?: string;
   campus?: string;
@@ -75,6 +84,12 @@ const FacultyProfileSchema = new Schema<IFacultyProfile>(
     department: { type: String },
     joinedDate: { type: String },
     expertises: { type: [String], default: [] },
+    doubtDomains: {
+      type: [String],
+      enum: DOUBT_DOMAINS as unknown as string[],
+      default: [],
+      index: true,
+    },
     title: { type: String },
     experience: { type: String },
     campus: { type: String },

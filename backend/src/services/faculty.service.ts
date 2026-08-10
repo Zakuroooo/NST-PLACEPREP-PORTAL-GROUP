@@ -16,16 +16,43 @@ import { ApiError } from '../utils/apiError';
 import { sanitizeAndLimit } from '../utils/sanitize';
 import mongoose from 'mongoose';
 import CurriculumTopic from '../models/CurriculumTopic';
+import { DOUBT_DOMAINS } from '../types/shared.types';
+
+/**
+ * Resolve the doubt-visibility scope for one faculty member.
+ *
+ * Returns their admin-assigned domains plus the set of "uncovered" domains
+ * (those with zero assigned faculty anywhere), which stay visible to everyone
+ * so an admin gap can't strand a student's doubt. Both lists are needed by
+ * every doubtRepository.findByFacultyId call, so this is the single place that
+ * derives them — keeping the dashboard, list and stats views consistent.
+ */
+async function resolveDoubtScope(
+  facultyUserId: string
+): Promise<{ domains: string[]; unscopedTags: string[] }> {
+  const [profile, covered] = await Promise.all([
+    facultyRepository.findByUserId(facultyUserId),
+    facultyRepository.findCoveredDoubtDomains(),
+  ]);
+  const coveredSet = new Set(covered);
+  return {
+    domains: profile?.doubtDomains ?? [],
+    unscopedTags: DOUBT_DOMAINS.filter((d) => !coveredSet.has(d)),
+  };
+}
 
 export const facultyService = {
   /**
    * Get faculty dashboard stats: pending doubts, upcoming sessions, recent activity.
    */
   async getDashboard(facultyUserId: string) {
+    // Scope must resolve before the doubt queries so both see the same domains.
+    const { domains, unscopedTags } = await resolveDoubtScope(facultyUserId);
+
     const [profile, pendingDoubts, allDoubts, pendingSessions, confirmedSessions, allStudents, heatmap] = await Promise.all([
       facultyRepository.findByUserId(facultyUserId),
-      doubtRepository.findByFacultyId(facultyUserId, 'pending'),
-      doubtRepository.findByFacultyId(facultyUserId),
+      doubtRepository.findByFacultyId(facultyUserId, 'pending', domains, unscopedTags),
+      doubtRepository.findByFacultyId(facultyUserId, undefined, domains, unscopedTags),
       sessionRepository.getFacultySessionsByStatus(facultyUserId, 'pending'),
       sessionRepository.getFacultySessionsByStatus(facultyUserId, 'confirmed'),
       studentRepository.findAllSimple(), // Just to get a count, though this might be heavy if many students
@@ -76,10 +103,12 @@ export const facultyService = {
   },
 
   /**
-   * Get all doubt threads for this faculty member.
+   * Get all doubt threads visible to this faculty member — scoped to the
+   * doubt domains an admin assigned them, plus any uncovered domains.
    */
   async getDoubts(facultyUserId: string, status?: string) {
-    return doubtRepository.findByFacultyId(facultyUserId, status);
+    const { domains, unscopedTags } = await resolveDoubtScope(facultyUserId);
+    return doubtRepository.findByFacultyId(facultyUserId, status, domains, unscopedTags);
   },
 
   /**
@@ -95,11 +124,24 @@ export const facultyService = {
     const thread = await doubtRepository.findById(doubtId);
     if (!thread) throw ApiError.notFound('Doubt thread not found.');
 
-    // BUG 1 FOLLOW-UP: Only block if explicitly assigned to a DIFFERENT faculty.
-    // Unassigned doubts (open pool, assignedFacultyId = null) can be replied to by any faculty.
+    // Only block if explicitly assigned to a DIFFERENT faculty.
     const assignedId = thread.assignedFacultyId?.toString();
     if (assignedId && assignedId !== facultyUserId) {
       throw ApiError.forbidden('This doubt is assigned to another faculty member.');
+    }
+
+    // Open-pool doubts are now domain-scoped, so authorization has to match
+    // visibility: without this check a faculty member could reply to a doubt
+    // outside their domains by POSTing the id directly, even though the list
+    // endpoint would never show it to them.
+    if (!assignedId) {
+      const { domains, unscopedTags } = await resolveDoubtScope(facultyUserId);
+      const canReply = domains.includes(thread.tag) || unscopedTags.includes(thread.tag);
+      if (!canReply) {
+        throw ApiError.forbidden(
+          `This doubt is outside your assigned domains. Ask an admin to add "${thread.tag}" to your profile.`
+        );
+      }
     }
 
     const sanitizedBody = sanitizeAndLimit(body, 5000);
@@ -223,8 +265,15 @@ export const facultyService = {
 
     const user = await userRepository.findById(facultyUserId);
 
-    // Count stats for profile
-    const allDoubts = await doubtRepository.findByFacultyId(facultyUserId);
+    // Count stats for profile — same domain scope as the doubts list, so the
+    // numbers here match what the faculty member can actually open.
+    const scope = await resolveDoubtScope(facultyUserId);
+    const allDoubts = await doubtRepository.findByFacultyId(
+      facultyUserId,
+      undefined,
+      scope.domains,
+      scope.unscopedTags
+    );
     const resolvedDoubts = allDoubts.filter(d => d.status === 'resolved');
     const allSessions = await sessionRepository.getFacultySessionsByStatus(facultyUserId, 'confirmed');
 
@@ -425,9 +474,19 @@ export const facultyService = {
       faculties = faculties.filter(f => f.fullName.toLowerCase().includes(q) || (f.department && f.department.toLowerCase().includes(q)));
     }
 
+    // Uncovered domains are the same for everyone, so resolve once rather than
+    // per faculty inside the map below.
+    const covered = new Set(await facultyRepository.findCoveredDoubtDomains());
+    const unscopedTags = DOUBT_DOMAINS.filter((d) => !covered.has(d));
+
     const leaderboard = await Promise.all(faculties.map(async (f) => {
        const [doubts, sessions] = await Promise.all([
-         doubtRepository.findByFacultyId(f.userId?.toString() || (f._id as mongoose.Types.ObjectId).toString()),
+         doubtRepository.findByFacultyId(
+           f.userId?.toString() || (f._id as mongoose.Types.ObjectId).toString(),
+           undefined,
+           f.doubtDomains ?? [],
+           unscopedTags
+         ),
          sessionRepository.findByFacultyId(f.userId?.toString() || (f._id as mongoose.Types.ObjectId).toString())
        ]);
        
@@ -467,7 +526,13 @@ export const facultyService = {
    * Get faculty activity heatmap data for the past 365 days.
    */
   async getFacultyActivityHeatmap(facultyUserId: string) {
-    const allDoubts = await doubtRepository.findByFacultyId(facultyUserId);
+    const scope = await resolveDoubtScope(facultyUserId);
+    const allDoubts = await doubtRepository.findByFacultyId(
+      facultyUserId,
+      undefined,
+      scope.domains,
+      scope.unscopedTags
+    );
     const resolvedDoubts = allDoubts.filter(d => d.status === 'resolved' && d.resolvedAt);
 
     // Create a 365-day array
